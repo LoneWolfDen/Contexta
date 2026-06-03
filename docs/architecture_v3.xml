@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net">
+  <diagram name="Contexta V3">
+	<mxGraphModel>
+  	<root>
+    	<mxCell id="0"/>
+    	<mxCell id="1" parent="0"/>
+
+    	<!-- UI -->
+    	<mxCell id="2" value="UI Layer
+Simple Mode / Advanced Mode" style="rounded=1;fillColor=#f5f5f5;" vertex="1" parent="1">
+      	<mxGeometry x="50" y="40" width="300" height="60" as="geometry"/>
+    	</mxCell>
+
+    	<!-- API -->
+    	<mxCell id="3" value="API Layer
+Extensible Inputs/Outputs" style="rounded=1;fillColor=#dae8fc;" vertex="1" parent="1">
+      	<mxGeometry x="50" y="120" width="300" height="60" as="geometry"/>
+    	</mxCell>
+
+    	<!-- CORE -->
+    	<mxCell id="4" value="Core Engine (Hub)
+Validation + Orchestration" style="rounded=1;fillColor=#d5e8d4;" vertex="1" parent="1">
+      	<mxGeometry x="50" y="200" width="300" height="80" as="geometry"/>
+    	</mxCell>
+
+    	<!-- MODULES -->
+    	<mxCell id="5" value="Modules (Spokes)
+Ingest | Version | Review | Iteration | Reconciliation | Proposal" style="rounded=1;fillColor=#fff2cc;" vertex="1" parent="1">
+      	<mxGeometry x="400" y="120" width="500" height="120" as="geometry"/>
+    	</mxCell>
+
+    	<!-- LEARNING -->
+    	<mxCell id="6" value="Learning Layer
+Client Memory + Prompt Suggestions" style="rounded=1;fillColor=#f8cecc;" vertex="1" parent="1">
+      	<mxGeometry x="400" y="260" width="500" height="80" as="geometry"/>
+    	</mxCell>
+
+    	<!-- STORAGE -->
+    	<mxCell id="7" value="Storage Layer
+SQLite (metadata)
+Filesystem (JSON, XML, DrawIO)" style="rounded=1;fillColor=#e1d5e7;" vertex="1" parent="1">
+      	<mxGeometry x="50" y="300" width="300" height="100" as="geometry"/>
+    	</mxCell>
+
+    	<!-- CONFIG -->
+    	<mxCell id="8" value="Admin + Config
+Personas | Prompts | Limits | API Keys" style="rounded=1;fillColor=#fff2cc;" vertex="1" parent="1">
+      	<mxGeometry x="50" y="420" width="300" height="80" as="geometry"/>
+    	</mxCell>
+
+    	<!-- AI -->
+    	<mxCell id="9" value="AI Providers
+Ollama | Bedrock | Gemini | Groq" style="rounded=1;fillColor=#dae8fc;" vertex="1" parent="1">
+      	<mxGeometry x="400" y="360" width="500" height="80" as="geometry"/>
+    	</mxCell>
+
+    	<!-- TRACE -->
+    	<mxCell id="10" value="Traceability
+Project → Version → Review → Iteration → Reconciliation → Proposal" style="rounded=1;dashed=1;" vertex="1" parent="1">
+      	<mxGeometry x="50" y="520" width="850" height="60" as="geometry"/>
+    	</mxCell>
+
+  	</root>
+	</mxGraphModel>
+  </diagram>
+</mxfile>
