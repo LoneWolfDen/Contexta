@@ -1,8 +1,9 @@
 """
 Review Analysis Service
 Responsibility: generate a structured deterministic review from a version record.
-Input  → version dict (contains version_summary + artifact_snapshot)
-Process → inspect summary fields and snapshot coverage; derive weaknesses, summary, explainability
+Input  → version dict (contains version_summary + artifact_snapshot), optional personas list
+Process → inspect summary fields and snapshot coverage; derive weaknesses, summary, explainability;
+          reorder/emphasise findings based on supplied personas
 Output → result dict  {summary, weaknesses, explainability}
 
 Rules:
@@ -10,6 +11,7 @@ Rules:
 - No assumptions beyond available data.
 - Every weakness must be traceable to a specific gap in version_summary or snapshot.
 - All output keys always present.
+- Persona handling is deterministic: same personas always produce same ordering.
 """
 
 import uuid
@@ -50,21 +52,45 @@ _FIELD_DESCRIPTION = {
 
 
 # ---------------------------------------------------------------------------
+# Persona → weakness category priority mapping
+# ---------------------------------------------------------------------------
+
+# Maps normalised persona key to the weakness categories that should be
+# surfaced first in recommended_focus and key_findings.
+_PERSONA_PRIORITY: dict = {
+    "architect": ["architecture_understanding", "solution_understanding"],
+    "delivery lead": ["delivery_model"],
+    "security": ["constraints"],
+}
+
+# Security sentinel: if none of these summary fields contain "security",
+# produce a deterministic security-context finding.
+_SECURITY_SUMMARY_FIELDS = (
+    "constraints",
+    "tooling_recommendations",
+    "technology_landscape",
+)
+
+
+# ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
 
-def generate_review(version: dict) -> dict:
+def generate_review(version: dict, personas: list = None) -> dict:
     """
     Produce a structured deterministic review result from a version record.
 
-    Reads:  version["version_summary"], version["artifact_snapshot"]
+    Args:
+        version:  version record with version_summary and artifact_snapshot.
+        personas: optional list of normalised persona keys (lowercase strings).
+                  When supplied, weakness ordering and focus areas are adjusted
+                  deterministically. No AI calls are made.
+
     Returns: {summary, weaknesses, explainability}
     """
+    personas = personas or []
     version_summary = version.get("version_summary") or {}
     artifact_snapshot = version.get("artifact_snapshot") or []
-
-    weaknesses = []
-    rules_used = []
 
     weaknesses, rules_used = _evaluate_summary_fields(version_summary)
 
@@ -76,7 +102,15 @@ def generate_review(version: dict) -> dict:
     weaknesses.extend(coverage_weaknesses)
     rules_used.extend(coverage_rules)
 
-    summary = _build_summary(weaknesses, version_summary)
+    if "security" in personas:
+        sec_weaknesses, sec_rules = _evaluate_security_context(version_summary)
+        weaknesses.extend(sec_weaknesses)
+        rules_used.extend(sec_rules)
+
+    if personas:
+        weaknesses = _reorder_by_personas(weaknesses, personas)
+
+    summary = _build_summary(weaknesses, version_summary, personas)
     explainability = _build_explainability(rules_used)
 
     return {
@@ -170,11 +204,86 @@ def _evaluate_artifact_coverage(artifact_snapshot: list) -> tuple:
 
 
 # ---------------------------------------------------------------------------
+# Rule: security context missing (triggered only when "security" persona active)
+# ---------------------------------------------------------------------------
+
+def _evaluate_security_context(version_summary: dict) -> tuple:
+    """
+    Produce a deterministic weakness when no security-related content is
+    detectable in any of the designated summary fields.
+
+    Only called when the "security" persona is present.
+    """
+    weaknesses = []
+    rules_used = []
+
+    has_security = False
+    for field in _SECURITY_SUMMARY_FIELDS:
+        value = version_summary.get(field, "")
+        # constraints may be a list; check each item
+        if isinstance(value, list):
+            if any("security" in str(item).lower() for item in value):
+                has_security = True
+                break
+        elif isinstance(value, str) and "security" in value.lower():
+            has_security = True
+            break
+
+    if not has_security:
+        weakness = _make_weakness(
+            category="missing_security_context",
+            severity="high",
+            description=(
+                "Security persona active: no security-related context found in version summary. "
+                "Security constraints, tooling, or controls are not documented."
+            ),
+            source_refs=list(_SECURITY_SUMMARY_FIELDS),
+        )
+        weaknesses.append(weakness)
+        rules_used.append("rule:missing_security_context")
+
+    return weaknesses, rules_used
+
+
+# ---------------------------------------------------------------------------
+# Persona-driven reordering
+# ---------------------------------------------------------------------------
+
+def _reorder_by_personas(weaknesses: list, personas: list) -> list:
+    """
+    Reorder weaknesses so that those matching persona priority categories
+    appear first. Relative order within each group is preserved.
+    Weaknesses not matching any persona priority are placed after.
+    """
+    # Build ordered list of priority category keywords from active personas
+    priority_categories = []
+    for persona in personas:
+        for cat in _PERSONA_PRIORITY.get(persona, []):
+            if cat not in priority_categories:
+                priority_categories.append(cat)
+
+    def _priority_index(weakness: dict) -> int:
+        refs = " ".join(weakness.get("source_refs", []))
+        desc = weakness.get("description", "").lower()
+        for idx, cat in enumerate(priority_categories):
+            if cat in refs or cat in desc:
+                return idx
+        return len(priority_categories)  # lower priority — placed after
+
+    return sorted(weaknesses, key=_priority_index)
+
+
+# ---------------------------------------------------------------------------
 # Builders
 # ---------------------------------------------------------------------------
 
-def _build_summary(weaknesses: list, version_summary: dict) -> dict:
-    """Derive overall_assessment, key_findings, and recommended_focus."""
+def _build_summary(weaknesses: list, version_summary: dict, personas: list = None) -> dict:
+    """Derive overall_assessment, key_findings, and recommended_focus.
+
+    When personas are active the recommended_focus list is already ordered by
+    _reorder_by_personas; we simply pull from the already-ordered weaknesses.
+    """
+    personas = personas or []
     high_count = sum(1 for w in weaknesses if w["severity"] == "high")
     medium_count = sum(1 for w in weaknesses if w["severity"] == "medium")
     total = len(weaknesses)
@@ -197,7 +306,10 @@ def _build_summary(weaknesses: list, version_summary: dict) -> dict:
     else:
         overall = "All expected summary sections are covered. No weaknesses detected."
 
+    # key_findings: high-severity items in current (potentially persona-reordered) order
     key_findings = [w["description"] for w in weaknesses if w["severity"] == "high"]
+
+    # recommended_focus: high + medium in current order (persona reordering already applied)
     recommended_focus = [w["description"] for w in weaknesses if w["severity"] in ("high", "medium")]
 
     return {

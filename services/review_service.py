@@ -1,12 +1,14 @@
 """
 Review Service
 Responsibility: validate version exists, run deterministic review analysis, persist result.
-Input  → version_id
-Process → verify version exists, call review_analysis_service, build and store review record
+Input  → version_id, optional personas, user_context, config
+Process → verify version exists, build prompt_context, call review_analysis_service,
+          attach prompt_context + personas to result, build and store review record
 Output → stored review dict
 """
 
 from models.review import make_review
+from services.prompt_builder_service import build_prompt_context, resolve_personas
 from services.review_analysis_service import generate_review
 from storage import store
 
@@ -20,13 +22,17 @@ def create_review(payload: dict) -> dict:
     if version is None:
         raise ValueError(f"version_id '{version_id}' does not exist.")
 
-    result = generate_review(version)
+    personas = resolve_personas(payload.get("personas") or [])
+    prompt_context = build_prompt_context(version, payload)
+    result = generate_review(version, personas=personas)
 
     record = make_review(
         version_id=version_id,
         project_id=version["project_id"],
         result=result,
         config=payload.get("config", {}),
+        personas=personas,
+        prompt_context=prompt_context,
     )
     return store.insert_review(record)
 

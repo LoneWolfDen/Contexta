@@ -243,3 +243,119 @@ def test_create_review_overall_assessment_is_not_empty(client):
     vid = _make_version(client, pid, aid)
     res = client.post("/reviews", json={"version_id": vid})
     assert res.get_json()["result"]["summary"]["overall_assessment"] != ""
+
+
+
+# ---------------------------------------------------------------------------
+# Sprint 3 — Persona and Prompt Foundation
+# ---------------------------------------------------------------------------
+
+def test_review_accepts_personas(client):
+    pid = _make_project(client)
+    aid = _make_artifact(client, pid)
+    vid = _make_version(client, pid, aid)
+    res = client.post("/reviews", json={"version_id": vid, "personas": ["Architect"]})
+    assert res.status_code == 201
+
+
+def test_review_without_personas_still_works(client):
+    """Backward compatibility: version_id-only payload must succeed."""
+    pid = _make_project(client)
+    aid = _make_artifact(client, pid)
+    vid = _make_version(client, pid, aid)
+    res = client.post("/reviews", json={"version_id": vid})
+    assert res.status_code == 201
+    assert res.get_json()["status"] == "complete"
+
+
+def test_personas_default_to_empty_list(client):
+    """When no personas supplied, result.personas must be an empty list."""
+    pid = _make_project(client)
+    aid = _make_artifact(client, pid)
+    vid = _make_version(client, pid, aid)
+    res = client.post("/reviews", json={"version_id": vid})
+    assert res.get_json()["result"]["personas"] == []
+
+
+def test_prompt_context_created(client):
+    """result.prompt_context must exist in the review response."""
+    pid = _make_project(client)
+    aid = _make_artifact(client, pid)
+    vid = _make_version(client, pid, aid)
+    res = client.post("/reviews", json={"version_id": vid})
+    assert "prompt_context" in res.get_json()["result"]
+
+
+def test_prompt_context_has_required_keys(client):
+    pid = _make_project(client)
+    aid = _make_artifact(client, pid)
+    vid = _make_version(client, pid, aid)
+    res = client.post("/reviews", json={"version_id": vid, "personas": ["Architect"]})
+    pc = res.get_json()["result"]["prompt_context"]
+    for key in ("base_prompt", "persona_prompts", "user_context", "version_context_refs"):
+        assert key in pc, f"Missing prompt_context key: {key}"
+
+
+def test_prompt_context_version_context_refs_has_expected_values(client):
+    pid = _make_project(client)
+    aid = _make_artifact(client, pid)
+    vid = _make_version(client, pid, aid)
+    res = client.post("/reviews", json={"version_id": vid})
+    refs = res.get_json()["result"]["prompt_context"]["version_context_refs"]
+    assert "version_summary" in refs
+    assert "artifact_snapshot" in refs
+
+
+def test_personas_stored_in_result(client):
+    pid = _make_project(client)
+    aid = _make_artifact(client, pid)
+    vid = _make_version(client, pid, aid)
+    res = client.post("/reviews", json={"version_id": vid, "personas": ["Architect", "Security"]})
+    personas = res.get_json()["result"]["personas"]
+    assert "architect" in personas
+    assert "security" in personas
+
+
+def test_unknown_personas_are_dropped(client):
+    """Unrecognised persona strings must not appear in stored personas."""
+    pid = _make_project(client)
+    aid = _make_artifact(client, pid)
+    vid = _make_version(client, pid, aid)
+    res = client.post("/reviews", json={"version_id": vid, "personas": ["Ghost"]})
+    assert res.status_code == 201
+    assert res.get_json()["result"]["personas"] == []
+
+
+def test_user_context_stored_in_prompt_context(client):
+    pid = _make_project(client)
+    aid = _make_artifact(client, pid)
+    vid = _make_version(client, pid, aid)
+    res = client.post("/reviews", json={
+        "version_id": vid,
+        "user_context": "Focus on cloud deployment risks.",
+    })
+    uc = res.get_json()["result"]["prompt_context"]["user_context"]
+    assert uc == "Focus on cloud deployment risks."
+
+
+def test_architect_persona_produces_persona_prompt(client):
+    pid = _make_project(client)
+    aid = _make_artifact(client, pid)
+    vid = _make_version(client, pid, aid)
+    res = client.post("/reviews", json={"version_id": vid, "personas": ["Architect"]})
+    pp = res.get_json()["result"]["prompt_context"]["persona_prompts"]
+    assert len(pp) == 1
+    assert pp[0]["persona"] == "Architect"
+
+
+def test_review_accepts_all_three_personas(client):
+    pid = _make_project(client)
+    aid = _make_artifact(client, pid)
+    vid = _make_version(client, pid, aid)
+    res = client.post("/reviews", json={
+        "version_id": vid,
+        "personas": ["Architect", "Delivery Lead", "Security"],
+    })
+    assert res.status_code == 201
+    personas = res.get_json()["result"]["personas"]
+    assert set(personas) == {"architect", "delivery lead", "security"}
