@@ -10,6 +10,7 @@ from routes.versions import versions_bp
 from routes.reviews import reviews_bp
 from routes.reconciliation import reconciliation_bp
 from routes.proposal import proposal_bp
+from routes.learning import learning_bp
 
 
 def create_app() -> Flask:
@@ -21,6 +22,7 @@ def create_app() -> Flask:
     app.register_blueprint(reviews_bp)
     app.register_blueprint(reconciliation_bp)
     app.register_blueprint(proposal_bp)
+    app.register_blueprint(learning_bp)
 
     @app.route("/health", methods=["GET"])
     def health():
