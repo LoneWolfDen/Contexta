@@ -2,11 +2,12 @@
 Version Service
 Responsibility: validate artifact selection, snapshot artifacts, persist version.
 Input  → project_id + artifact_ids[]
-Process → verify project and artifacts exist, build snapshot, store version
+Process → verify project and artifacts exist, build snapshot, generate summary, store version
 Output → stored version dict
 """
 
 from models.version import make_version
+from services.version_summary_service import generate_version_summary
 from storage import store
 
 
@@ -22,10 +23,12 @@ def create_version(payload: dict) -> dict:
         raise ValueError(f"project_id '{project_id}' does not exist.")
 
     snapshot = _build_snapshot(artifact_ids, project_id)
+    summary = generate_version_summary(snapshot)
 
     record = make_version(
         project_id=project_id,
         artifact_snapshot=snapshot,
+        version_summary=summary,
         config=payload.get("config", {}),
     )
     return store.insert_version(record)

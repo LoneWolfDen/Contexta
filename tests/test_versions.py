@@ -145,6 +145,51 @@ def test_create_version_cross_project_error_message(client):
 
 
 # ---------------------------------------------------------------------------
+# Sprint 1 — version_summary field
+# ---------------------------------------------------------------------------
+
+def test_create_version_has_version_summary(client):
+    """version_summary key must be present in every version response."""
+    pid = _make_project(client)
+    aid = _make_artifact(client, pid)
+    res = client.post("/versions", json={"project_id": pid, "artifact_ids": [aid]})
+    assert "version_summary" in res.get_json()
+
+
+def test_version_summary_has_all_required_keys(client):
+    """version_summary must contain all nine defined keys."""
+    from services.version_summary_service import SUMMARY_FIELDS
+    pid = _make_project(client)
+    aid = _make_artifact(client, pid)
+    res = client.post("/versions", json={"project_id": pid, "artifact_ids": [aid]})
+    summary = res.get_json()["version_summary"]
+    for key in SUMMARY_FIELDS:
+        assert key in summary, f"Missing summary key: {key}"
+
+
+def test_version_summary_list_fields_are_lists(client):
+    """constraints, dependencies, and missing_information must be lists."""
+    pid = _make_project(client)
+    aid = _make_artifact(client, pid)
+    res = client.post("/versions", json={"project_id": pid, "artifact_ids": [aid]})
+    summary = res.get_json()["version_summary"]
+    for key in ("constraints", "dependencies", "missing_information"):
+        assert isinstance(summary[key], list), f"Expected list for '{key}'"
+
+
+def test_version_summary_stored_with_version(client):
+    """version_summary returned by GET /versions must also contain all keys."""
+    from services.version_summary_service import SUMMARY_FIELDS
+    pid = _make_project(client)
+    aid = _make_artifact(client, pid)
+    client.post("/versions", json={"project_id": pid, "artifact_ids": [aid]})
+    versions = client.get("/versions").get_json()
+    summary = versions[0]["version_summary"]
+    for key in SUMMARY_FIELDS:
+        assert key in summary
+
+
+# ---------------------------------------------------------------------------
 # Traceability: version carries project_id
 # ---------------------------------------------------------------------------
 
