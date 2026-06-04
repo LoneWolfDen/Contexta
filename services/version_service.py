@@ -21,7 +21,7 @@ def create_version(payload: dict) -> dict:
     if project is None:
         raise ValueError(f"project_id '{project_id}' does not exist.")
 
-    snapshot = _build_snapshot(artifact_ids)
+    snapshot = _build_snapshot(artifact_ids, project_id)
 
     record = make_version(
         project_id=project_id,
@@ -43,11 +43,23 @@ def _validate(payload: dict) -> None:
         raise ValueError("artifact_ids must be a non-empty list.")
 
 
-def _build_snapshot(artifact_ids: list) -> list:
-    """Fetch artifact records and return snapshot. Raises if any ID is missing."""
+def _build_snapshot(artifact_ids: list, project_id: str) -> list:
+    """Fetch artifact records, verify ownership, return snapshot.
+
+    Raises if any ID is missing or belongs to a different project.
+    """
     found = store.get_artifacts_by_ids(artifact_ids)
     found_ids = {a["artifact_id"] for a in found}
     missing = [aid for aid in artifact_ids if aid not in found_ids]
     if missing:
         raise ValueError(f"artifact_ids not found: {missing}")
+
+    cross_project = [
+        a["artifact_id"] for a in found if a["project_id"] != project_id
+    ]
+    if cross_project:
+        raise ValueError(
+            f"artifact_ids do not belong to project '{project_id}': {cross_project}"
+        )
+
     return found

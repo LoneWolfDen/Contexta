@@ -114,6 +114,37 @@ def test_list_versions_contains_created_version(client):
 
 
 # ---------------------------------------------------------------------------
+# Cross-project artifact ownership validation
+# ---------------------------------------------------------------------------
+
+def test_create_version_same_project_artifacts_succeeds(client):
+    """Artifacts that belong to the same project must be accepted."""
+    pid = _make_project(client)
+    aid1 = _make_artifact(client, pid)
+    aid2 = _make_artifact(client, pid)
+    res = client.post("/versions", json={"project_id": pid, "artifact_ids": [aid1, aid2]})
+    assert res.status_code == 201
+
+
+def test_create_version_cross_project_artifact_returns_400(client):
+    """An artifact from a different project must be rejected with 400."""
+    pid_a = _make_project(client, name="ProjectA")
+    pid_b = _make_project(client, name="ProjectB")
+    aid_b = _make_artifact(client, pid_b)   # artifact belongs to project B
+    res = client.post("/versions", json={"project_id": pid_a, "artifact_ids": [aid_b]})
+    assert res.status_code == 400
+
+
+def test_create_version_cross_project_error_message(client):
+    """Error response must contain the 'error' key when cross-project artifact is used."""
+    pid_a = _make_project(client, name="ProjectA")
+    pid_b = _make_project(client, name="ProjectB")
+    aid_b = _make_artifact(client, pid_b)
+    res = client.post("/versions", json={"project_id": pid_a, "artifact_ids": [aid_b]})
+    assert "error" in res.get_json()
+
+
+# ---------------------------------------------------------------------------
 # Traceability: version carries project_id
 # ---------------------------------------------------------------------------
 
