@@ -41,12 +41,12 @@ def test_create_review_returns_review_id(client):
     assert "review_id" in res.get_json()
 
 
-def test_create_review_is_mock_status(client):
+def test_create_review_status_is_complete(client):
     pid = _make_project(client)
     aid = _make_artifact(client, pid)
     vid = _make_version(client, pid, aid)
     res = client.post("/reviews", json={"version_id": vid})
-    assert res.get_json()["status"] == "mock"
+    assert res.get_json()["status"] == "complete"
 
 
 def test_create_review_has_result_field(client):
@@ -138,3 +138,108 @@ def test_full_traceability_chain(client):
     assert version["project_id"] == pid
     snapshot_ids = [a["artifact_id"] for a in version["artifact_snapshot"]]
     assert aid in snapshot_ids
+
+
+
+# ---------------------------------------------------------------------------
+# Sprint 2 — structured result
+# ---------------------------------------------------------------------------
+
+def test_create_review_result_has_summary(client):
+    pid = _make_project(client)
+    aid = _make_artifact(client, pid)
+    vid = _make_version(client, pid, aid)
+    res = client.post("/reviews", json={"version_id": vid})
+    assert "summary" in res.get_json()["result"]
+
+
+def test_create_review_result_has_weaknesses(client):
+    pid = _make_project(client)
+    aid = _make_artifact(client, pid)
+    vid = _make_version(client, pid, aid)
+    res = client.post("/reviews", json={"version_id": vid})
+    assert "weaknesses" in res.get_json()["result"]
+
+
+def test_create_review_result_has_explainability(client):
+    pid = _make_project(client)
+    aid = _make_artifact(client, pid)
+    vid = _make_version(client, pid, aid)
+    res = client.post("/reviews", json={"version_id": vid})
+    assert "explainability" in res.get_json()["result"]
+
+
+def test_create_review_summary_has_required_keys(client):
+    pid = _make_project(client)
+    aid = _make_artifact(client, pid)
+    vid = _make_version(client, pid, aid)
+    res = client.post("/reviews", json={"version_id": vid})
+    summary = res.get_json()["result"]["summary"]
+    for key in ("overall_assessment", "key_findings", "recommended_focus"):
+        assert key in summary, f"Missing summary key: {key}"
+
+
+def test_create_review_explainability_has_required_keys(client):
+    pid = _make_project(client)
+    aid = _make_artifact(client, pid)
+    vid = _make_version(client, pid, aid)
+    res = client.post("/reviews", json={"version_id": vid})
+    explainability = res.get_json()["result"]["explainability"]
+    assert "based_on" in explainability
+    assert "rules_used" in explainability
+
+
+def test_create_review_explainability_based_on_is_populated(client):
+    pid = _make_project(client)
+    aid = _make_artifact(client, pid)
+    vid = _make_version(client, pid, aid)
+    res = client.post("/reviews", json={"version_id": vid})
+    based_on = res.get_json()["result"]["explainability"]["based_on"]
+    assert "version_summary" in based_on
+
+
+def test_create_review_weaknesses_are_list(client):
+    pid = _make_project(client)
+    aid = _make_artifact(client, pid)
+    vid = _make_version(client, pid, aid)
+    res = client.post("/reviews", json={"version_id": vid})
+    assert isinstance(res.get_json()["result"]["weaknesses"], list)
+
+
+def test_create_review_weakness_has_required_keys(client):
+    """A generic artifact produces weaknesses — validate their structure."""
+    pid = _make_project(client)
+    aid = _make_artifact(client, pid)
+    vid = _make_version(client, pid, aid)
+    res = client.post("/reviews", json={"version_id": vid})
+    weaknesses = res.get_json()["result"]["weaknesses"]
+    assert len(weaknesses) > 0, "Expected at least one weakness for a generic document artifact"
+    for w in weaknesses:
+        for key in ("weakness_id", "category", "severity", "description", "source_refs"):
+            assert key in w, f"Missing weakness key: {key}"
+
+
+def test_create_review_weakness_severity_is_valid(client):
+    pid = _make_project(client)
+    aid = _make_artifact(client, pid)
+    vid = _make_version(client, pid, aid)
+    res = client.post("/reviews", json={"version_id": vid})
+    for w in res.get_json()["result"]["weaknesses"]:
+        assert w["severity"] in ("low", "medium", "high")
+
+
+def test_create_review_overall_assessment_is_string(client):
+    pid = _make_project(client)
+    aid = _make_artifact(client, pid)
+    vid = _make_version(client, pid, aid)
+    res = client.post("/reviews", json={"version_id": vid})
+    assert isinstance(res.get_json()["result"]["summary"]["overall_assessment"], str)
+
+
+def test_create_review_overall_assessment_is_not_empty(client):
+    """overall_assessment must always contain a non-empty string."""
+    pid = _make_project(client)
+    aid = _make_artifact(client, pid)
+    vid = _make_version(client, pid, aid)
+    res = client.post("/reviews", json={"version_id": vid})
+    assert res.get_json()["result"]["summary"]["overall_assessment"] != ""

@@ -1,20 +1,18 @@
 """
 Review Service
-Responsibility: validate version exists, create mock review, persist it.
+Responsibility: validate version exists, run deterministic review analysis, persist result.
 Input  → version_id
-Process → verify version + project exist, build mock review record
+Process → verify version exists, call review_analysis_service, build and store review record
 Output → stored review dict
-
-AI logic is NOT implemented in Sprint 0.
-The review result is a deterministic mock.
 """
 
 from models.review import make_review
+from services.review_analysis_service import generate_review
 from storage import store
 
 
 def create_review(payload: dict) -> dict:
-    """Create a mock review linked to a version and persist it."""
+    """Run a deterministic review against a version and persist the result."""
     _validate(payload)
 
     version_id = payload["version_id"]
@@ -22,9 +20,12 @@ def create_review(payload: dict) -> dict:
     if version is None:
         raise ValueError(f"version_id '{version_id}' does not exist.")
 
+    result = generate_review(version)
+
     record = make_review(
         version_id=version_id,
         project_id=version["project_id"],
+        result=result,
         config=payload.get("config", {}),
     )
     return store.insert_review(record)
