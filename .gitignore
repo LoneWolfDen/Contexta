@@ -6,3 +6,13 @@ __pycache__/
 dist/
 build/
 .env
+# Runtime storage
+storage/*
+!storage/.gitkeep
+
+# Ignore databases
+*.db
+*.sqlite
+
+# Optional: logs
+*.log
