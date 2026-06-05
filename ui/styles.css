@@ -1,39 +1,240 @@
-body {
-  font-family: Arial;
-  background: #f5f7fa;
+/* ============================================================
+   Contexta UI-lite V3 — Minimal Decision Dashboard
+   ============================================================ */
+
+/* Reset & base */
+*, *::before, *::after {
+  box-sizing: border-box;
   margin: 0;
+  padding: 0;
 }
 
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  background: #f0f2f5;
+  color: #1a1a2e;
+}
+
+/* ============================================================
+   Header
+   ============================================================ */
 header {
   background: #1f2937;
-  color: white;
-  padding: 15px;
-  font-size: 20px;
+  color: #ffffff;
+  padding: 0 24px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
 }
 
+.header-inner {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.header-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.header-sub {
+  font-size: 13px;
+  color: #9ca3af;
+  font-weight: 400;
+}
+
+/* ============================================================
+   Layout
+   ============================================================ */
 .container {
-  max-width: 900px;
-  margin: auto;
-  padding: 20px;
+  max-width: 820px;
+  margin: 32px auto;
+  padding: 0 20px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
+/* ============================================================
+   Cards
+   ============================================================ */
 .card {
-  background: white;
-  padding: 15px;
-  margin-bottom: 15px;
-  border-radius: 6px;
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 24px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.card h2 {
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #6b7280;
+  margin-bottom: 16px;
+}
+
+/* ============================================================
+   Controls card
+   ============================================================ */
+.controls-card {
+  border-left: 4px solid #2563eb;
+}
+
+.button-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 button {
-  padding: 8px 12px;
-  margin: 5px;
+  padding: 9px 18px;
   background: #2563eb;
-  color: white;
+  color: #ffffff;
   border: none;
   border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease;
 }
 
-li {
-  margin-bottom: 6px;
+button:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ============================================================
+   Status messages
+   ============================================================ */
+.status-message {
+  margin-top: 12px;
+  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: 5px;
+}
+
+.status-message.hidden {
+  display: none;
+}
+
+.status-ok {
+  background: #ecfdf5;
+  color: #065f46;
+}
+
+.status-error {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+/* ============================================================
+   Summary text
+   ============================================================ */
+.summary-text {
+  font-size: 15px;
+  color: #374151;
+  line-height: 1.6;
+}
+
+/* ============================================================
+   Item lists
+   ============================================================ */
+.item-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #f9fafb;
+  border-radius: 7px;
+  border: 1px solid #e5e7eb;
+}
+
+.item-label {
+  font-weight: 500;
+  font-size: 14px;
+  color: #111827;
+}
+
+.item-text {
+  font-size: 14px;
+  color: #374151;
+  line-height: 1.5;
+}
+
+/* ============================================================
+   Priority badges
+   ============================================================ */
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.badge-high {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.badge-medium {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+.badge-low {
+  background: #dcfce7;
+  color: #166534;
+}
+
+/* ============================================================
+   Empty states
+   ============================================================ */
+.empty-state {
+  font-size: 14px;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+@media (max-width: 600px) {
+  .container {
+    margin: 16px auto;
+    padding: 0 12px 32px;
+  }
+
+  .card {
+    padding: 18px;
+  }
+
+  .button-row {
+    flex-direction: column;
+  }
+
+  button {
+    width: 100%;
+  }
 }

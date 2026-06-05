@@ -2,53 +2,66 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Contexta Dashboard</title>
-  styles.css
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contexta — Decision Dashboard</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
 
-<header>
-  Contexta — Decision Dashboard
-</header>
+  <header>
+    <div class="header-inner">
+      <span class="header-title">Contexta</span>
+      <span class="header-sub">Decision Dashboard</span>
+    </div>
+  </header>
 
-<div class="container">
+  <main class="container">
 
-  <!-- Controls -->
-  <div class="card">
-    <h2>Run Analysis</h2>
+    <!-- Controls -->
+    <div class="card controls-card">
+      <h2>Run Analysis</h2>
+      <div class="button-row">
+        <button id="btn-load-proposal" onclick="loadLatestProposal()">Load Latest Proposal</button>
+        <button id="btn-load-learning" onclick="loadLatestLearning()">Load Learning Insights</button>
+      </div>
+      <div id="status-message" class="status-message hidden"></div>
+    </div>
 
-    <button onclick="loadLatestProposal()">Load Latest Proposal</button>
-    <button onclick="loadLatestLearning()">Load Learning</button>
-  </div>
+    <!-- Proposal Summary -->
+    <div class="card" id="card-proposal">
+      <h2>Proposal Summary</h2>
+      <div id="proposal-content">
+        <p class="empty-state">Load a proposal to see the summary.</p>
+      </div>
+    </div>
 
-  <!-- Proposal -->
-  <div class="card" id="proposal">
-    <h2>Proposal</h2>
-    <div id="proposal-content">No data yet</div>
-  </div>
+    <!-- Top Risks -->
+    <div class="card" id="card-risks">
+      <h2>Top Risks</h2>
+      <ul id="risks-list" class="item-list">
+        <li class="empty-state">No risks to display.</li>
+      </ul>
+    </div>
 
-  <!-- Risks -->
-  <div class="card" id="risks">
-    <h2>Top Risks</h2>
-    <ul id="risks-list"></ul>
-  </div>
+    <!-- Recommended Actions -->
+    <div class="card" id="card-actions">
+      <h2>Recommended Actions</h2>
+      <ul id="actions-list" class="item-list">
+        <li class="empty-state">No actions to display.</li>
+      </ul>
+    </div>
 
-  <!-- Actions -->
-  <div class="card">
-    <h2>Recommended Actions</h2>
-    <ul id="actions-list"></ul>
-  </div>
+    <!-- Learning Insights -->
+    <div class="card" id="card-learning">
+      <h2>Learning Insights</h2>
+      <ul id="learning-list" class="item-list">
+        <li class="empty-state">Load learning insights to see patterns.</li>
+      </ul>
+    </div>
 
-  <!-- Learning -->
-  <div class="card">
-    <h2>Learning Insights</h2>
-    <ul id="learning-list"></ul>
-  </div>
+  </main>
 
-</div>
-
-app.jsscript>
-
+  <script src="app.js"></script>
 </body>
 </html>
