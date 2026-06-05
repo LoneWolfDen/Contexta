@@ -25,13 +25,35 @@ async function loadLatestLearning() {
   renderLearning(latest);
 }
 
-// ✅ Render proposal
+
+
+function simplifyCategory(cat) {
+  if (cat.includes("missing_information")) return "Missing key inputs";
+  if (cat.includes("missing_security")) return "Security gaps";
+  return "Other risk";
+}
+
+
+
+// ✅ Render proposal (clean)
 function renderProposal(p) {
 
+  // Executive summary → shorten
   document.getElementById("proposal-content").innerHTML = `
-    <strong>Executive Summary:</strong>
-    <p>${p.summary.executive_summary}</p>
+    <strong>Summary:</strong>
+    <p>${p.summary.executive_summary.split(".")[0]}</p>
   `;
+
+  // ✅ Risks (top 3 only)
+  const risks = document.getElementById("risks-list");
+  risks.innerHTML = "";
+
+  p.recommendations.slice(0, 3).forEach(r => {
+    let li = document.createElement("li");
+    li.innerText = simplifyCategory(r.category) + " (High risk)";
+    risks.appendChild(li);
+  });
+
 
   // Risks
   const risks = document.getElementById("risks-list");
@@ -54,15 +76,19 @@ function renderProposal(p) {
   });
 }
 
-// ✅ Render learning
-function renderLearning(l) {
 
+// ✅ Render learning (short + readable)
+function renderLearning(l) {
   const learningList = document.getElementById("learning-list");
   learningList.innerHTML = "";
 
-  l.insights.slice(0, 3).forEach(i => {
+  l.insights.slice(0, 2).forEach(i => {
     let li = document.createElement("li");
-    li.innerText = i.detail;
+
+    // shorten insight
+    let text = i.detail.split(".")[0];
+    li.innerText = text;
+
     learningList.appendChild(li);
   });
 }
