@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Contexta Wireframe V3</title>
+  <style>
+    body {
+      font-family: Arial;
+      background: #f5f7fa;
+      margin: 0;
+    }
+
+    header {
+      background: #1f2937;
+      color: white;
+      padding: 15px;
+      font-size: 18px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: auto;
+      padding: 20px;
+    }
+
+    .card {
+      background: white;
+      padding: 15px;
+      margin-bottom: 15px;
+      border-radius: 6px;
+    }
+
+    h2 {
+      margin-top: 0;
+    }
+
+    button {
+      padding: 6px 10px;
+      margin-top: 10px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 5px;
+    }
+
+    .small {
+      font-size: 12px;
+      color: grey;
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  Contexta — Decision Dashboard (Wireframe)
+</header>
+
+<div class="container">
+
+  <!-- Controls -->
+  <div class="card">
+    <h2>Project / Version</h2>
+    <p>Select project and version</p>
+    <select>
+      <option>Project A</option>
+    </select>
+    <select>
+      <option>Version 1</option>
+    </select>
+
+    <br>
+    <button>Refresh</button>
+  </div>
+
+  <!-- Overview -->
+  <div class="card">
+    <h2>Overview</h2>
+    <p>✅ Review completed</p>
+    <p>✅ Proposal generated</p>
+  </div>
+
+  <!-- Risks -->
+  <div class="card">
+    <h2>🔴 Key Risks</h2>
+
+    <ul>
+      <li>Missing key inputs (High)</li>
+      <li>Security gaps (High)</li>
+      <li>Delivery unclear (Medium)</li>
+    </ul>
+
+    <button>View All</button>
+  </div>
+
+  <!-- Actions -->
+  <div class="card">
+    <h2>👉 Next Actions</h2>
+
+    <ul>
+      <li>Define missing inputs</li>
+      <li>Run security assessment</li>
+      <li>Confirm delivery approach</li>
+    </ul>
+  </div>
+
+  <!-- Proposal -->
+  <div class="card">
+    <h2>📄 Proposal Summary</h2>
+
+    <p><strong>Summary:</strong> High-risk gaps identified in inputs and security.</p>
+
+    <p><strong>Recommended:</strong> Define inputs and apply security controls.</p>
+
+    <button>Open Proposal</button>
+  </div>
+
+  <!-- Learning -->
+  <div class="card">
+    <h2>📘 Key Learnings</h2>
+
+    <ul>
+      <li>Missing inputs increase delivery risk</li>
+      <li>Security gaps appear without architecture</li>
+    </ul>
+
+    <button>View Learning</button>
+  </div>
+
+</div>
+
+</body>
+</html>
