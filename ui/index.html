@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Contexta Dashboard</title>
+  styles.css
+</head>
+
+<body>
+
+<header>
+  Contexta — Decision Dashboard
+</header>
+
+<div class="container">
+
+  <!-- Controls -->
+  <div class="card">
+    <h2>Run Analysis</h2>
+
+    <button onclick="loadLatestProposal()">Load Latest Proposal</button>
+    <button onclick="loadLatestLearning()">Load Learning</button>
+  </div>
+
+  <!-- Proposal -->
+  <div class="card" id="proposal">
+    <h2>Proposal</h2>
+    <div id="proposal-content">No data yet</div>
+  </div>
+
+  <!-- Risks -->
+  <div class="card" id="risks">
+    <h2>Top Risks</h2>
+    <ul id="risks-list"></ul>
+  </div>
+
+  <!-- Actions -->
+  <div class="card">
+    <h2>Recommended Actions</h2>
+    <ul id="actions-list"></ul>
+  </div>
+
+  <!-- Learning -->
+  <div class="card">
+    <h2>Learning Insights</h2>
+    <ul id="learning-list"></ul>
+  </div>
+
+</div>
+
+app.jsscript>
+
+</body>
+</html>
