@@ -23,8 +23,11 @@ def create_app() -> Flask:
 
     @app.after_request
     def add_headers(response):
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Headers"] = "*"
+        origin = "https://animated-spoon-xrw755gpvpj429xpv-8080.app.github.dev"
+
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         return response
 
