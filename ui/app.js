@@ -1,4 +1,6 @@
-const BASE_URL = "http://localhost:5000";
+//const BASE_URL = "http://localhost:5000";
+const BASE_URL = "https://animated-spoon-xrw755gpvpj429xpv-5000.app.github.dev";
+
 
 // ✅ Load latest proposal
 async function loadLatestProposal() {
