@@ -1,0 +1,39 @@
+body {
+  font-family: Arial;
+  background: #f5f7fa;
+  margin: 0;
+}
+
+header {
+  background: #1f2937;
+  color: white;
+  padding: 15px;
+  font-size: 20px;
+}
+
+.container {
+  max-width: 900px;
+  margin: auto;
+  padding: 20px;
+}
+
+.card {
+  background: white;
+  padding: 15px;
+  margin-bottom: 15px;
+  border-radius: 6px;
+}
+
+button {
+  padding: 8px 12px;
+  margin: 5px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+li {
+  margin-bottom: 6px;
+}
