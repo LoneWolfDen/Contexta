@@ -4,7 +4,9 @@ const BASE_URL = "https://animated-spoon-xrw755gpvpj429xpv-5000.app.github.dev";
 
 // ✅ Load latest proposal
 async function loadLatestProposal() {
-  const res = await fetch(`${BASE_URL}/proposal`);
+  const res = await fetch(`${BASE_URL}/proposal`, {
+      method: "GET"
+    });
   const data = await res.json();
 
   // assume latest = last item

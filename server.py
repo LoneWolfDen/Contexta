@@ -15,7 +15,15 @@ from routes.learning import learning_bp
 
 def create_app() -> Flask:
     app = Flask(__name__)
-    CORS(app)
+    CORS(app, supports_credentials=True)
+
+    @app.after_request
+    def add_headers(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "*"
+    return response
+
 
     app.register_blueprint(projects_bp)
     app.register_blueprint(artifacts_bp)
