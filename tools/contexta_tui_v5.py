@@ -129,47 +129,81 @@ class ContextaConsole(App):
     # ---------------- LOAD TREE ----------------
 
     def load_tree(self):
-
+    
         root = self.artifact_tree.root
         root.remove_children()
+        root.label = "Contexta Pipeline"
         root.expand()
-
+    
+        projects = api_get("/projects")
         versions = api_get("/versions")
         reviews = api_get("/reviews")
         recons = api_get("/reconciliation")
         proposals = api_get("/proposal")
         learning = api_get("/learning")
-
-        for v in versions:
-
-            v_node = root.add(
-                f"📦 Version {v['version_id'][:6]}",
-                data=("version", v)
+    
+        for project in projects:
+    
+            p_node = root.add(
+                f"📁 {project.get('name', 'Project')}",
+                data=("project", project)
             )
-
-            v_reviews = [r for r in reviews if r.get("version_id") == v["version_id"]]
-
-            for r in v_reviews:
-                personas = r.get("personas") or r.get("result", {}).get("personas", [])
-                label = f"Review {r['review_id'][:6]}"
-                if personas:
-                    label += f" ({','.join(personas)})"
-
-                v_node.add(label, data=("review", r))
-
-            for rec in recons:
-                if any(r["review_id"] in rec.get("review_ids", []) for r in v_reviews):
-                    v_node.add(
-                        f"Recon {rec['recon_id'][:6]}",
-                        data=("recon", rec)
-                    )
-
-            for p in proposals:
-                if p.get("source_type") == "reconciliation":
-                    v_node.add(
-                        f"Proposal {p['proposal_id'][:6]}",
-                        data=("proposal", p)
-                    )
+    
+            p_versions = [v for v in versions if v.get("project_id") == project["project_id"]]
+    
+            for v in p_versions:
+    
+                v_node = p_node.add(
+                    f"📦 Version {v['version_id'][:6]}",
+                    data=("version", v)
+                )
+    
+                version_reviews = [r for r in reviews if r.get("version_id") == v["version_id"]]
+                review_ids = [r.get("review_id") for r in version_reviews]
+    
+                reviews_group = v_node.add("📝 Reviews", None)
+    
+                for r in version_reviews:
+                    personas = r.get("personas") or r.get("result", {}).get("personas", [])
+                    label = f"Review {r['review_id'][:6]}"
+                    if personas:
+                        label += f" [{','.join(personas)}]"
+    
+                    reviews_group.add(label, data=("review", r))
+    
+                recon_group = v_node.add("🔗 Reconciliation", None)
+                matched_recons = []
+    
+                for rec in recons:
+                    ids = rec.get("review_ids", [])
+                    if any(rid in ids for rid in review_ids):
+                        matched_recons.append(rec)
+                        recon_group.add(
+                            f"Recon {rec['recon_id'][:6]}",
+                            data=("recon", rec)
+                        )
+    
+                proposal_group = v_node.add("📄 Proposals", None)
+                matched_props = []
+    
+                for p in proposals:
+                    if p.get("source_type") == "reconciliation":
+                        matched_props.append(p)
+                        proposal_group.add(
+                            f"Proposal {p['proposal_id'][:6]}",
+                            data=("proposal", p)
+                        )
+    
+                learning_group = v_node.add("📘 Learning", None)
+    
+                for p in matched_props:
+                    for l in learning:
+                        if l.get("source_id") == p["proposal_id"]:
+                            learning_group.add(
+                                f"Learning {l['learning_id'][:6]}",
+                                data=("learning", l)
+                            )
+    
 
     # ---------------- SELECT ----------------
 
@@ -253,34 +287,64 @@ class ContextaConsole(App):
 
     # ---------------- COMPARE ----------------
 
+
     def action_compare_toggle(self):
         self.compare_mode = True
         self.compare_nodes = []
-        self.detail.update("Select 2 reviews to compare")
+        self.detail.update("✅ Compare mode ON → select two items")
 
-    def run_compare(self):
 
+    def run_compare(self):    
         a = self.compare_nodes[0].data
         b = self.compare_nodes[1].data
-
+    
         if not a or not b or a[0] != b[0]:
-            self.detail.update("Invalid compare")
+            self.detail.update("❌ Cannot compare different types")
             return
-
+    
         if a[0] == "review":
-
-            a_txt = a[1].get("result", {}).get("summary", {}).get("overall_assessment", "")
-            b_txt = b[1].get("result", {}).get("summary", {}).get("overall_assessment", "")
-
-            self.detail.update(f"""
-=== REVIEW A ===
-{a_txt}
-
---------------------
-
-=== REVIEW B ===
-{b_txt}
-""")
+    
+            a_data = a[1]
+            b_data = b[1]
+    
+            a_sum = a_data.get("result", {}).get("summary", {})
+            b_sum = b_data.get("result", {}).get("summary", {})
+    
+            text = f"""
+    === REVIEW COMPARISON ===
+    
+    A: {a_data['review_id']}
+    Weaknesses: {len(a_data.get("result", {}).get("weaknesses", []))}
+    
+    {a_sum.get("overall_assessment","")}
+    
+    ------------------------------------------
+    
+    B: {b_data['review_id']}
+    Weaknesses: {len(b_data.get("result", {}).get("weaknesses", []))}
+    
+    {b_sum.get("overall_assessment","")}
+    """
+        elif a[0] == "proposal":
+    
+            a_p = a[1]
+            b_p = b[1]
+    
+            text = f"""
+    === PROPOSAL COMPARISON ===
+    
+    A:
+    {a_p.get("summary", {}).get("executive_summary","")}
+    
+    ------------------------------------------
+    
+    B:
+    {b_p.get("summary", {}).get("executive_summary","")}
+    """
+        else:
+            text = "⚠️ Compare not implemented for this type"
+    
+        self.detail.update(text)
 
     # ---------------- REFRESH ----------------
 
