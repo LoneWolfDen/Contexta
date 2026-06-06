@@ -244,7 +244,7 @@ class ContextaOperatorConsole(App):
     # Logging
     # -----------------------------------------------------
 
-    def ui_log(self, text: str):def ui_log
+    def ui_log(self, text: str):
         self.log_output.update(text)
 
     # -----------------------------------------------------
