@@ -244,7 +244,7 @@ class ContextaOperatorConsole(App):
     # Logging
     # -----------------------------------------------------
 
-    def log(self, text: str):
+    def ui_log(self, text: str):def ui_log
         self.log_output.update(text)
 
     # -----------------------------------------------------
@@ -360,14 +360,14 @@ class ContextaOperatorConsole(App):
 
             if len(self.compare_nodes) == 1:
                 self.compare_output.update(f"A selected: {self.format_compare_label(node_type, data)}\nSelect second item...")
-                self.log("Compare mode: first item selected")
+                self.ui_log("Compare mode: first item selected")
                 return
 
             if len(self.compare_nodes) == 2:
                 self.render_compare()
                 self.compare_nodes = []
                 self.compare_mode = False
-                self.log("Compare complete")
+                self.ui_log("Compare complete")
                 return
 
         self.render_details(node_type, data)
@@ -564,7 +564,7 @@ Prompt Suggestions:
     def on_button_pressed(self, event):
         node = self.pipeline_tree.cursor_node
         if not node or not node.data:
-            self.log("Select a node first")
+            self.ui_log("Select a node first")
             return
 
         node_type, data = node.data
@@ -573,14 +573,14 @@ Prompt Suggestions:
 
         if event.button.id == "btn_review":
             if node_type != "version":
-                self.log("Run Review requires a Version selected")
+                self.ui_log("Run Review requires a Version selected")
                 return
 
             result = api_post("/reviews", {"version_id": data["version_id"]})
             if result:
-                self.log(f"✅ Review created: {ensure_alias('review', result.get('review_id', ''))}")
+                self.ui_log(f"✅ Review created: {ensure_alias('review', result.get('review_id', ''))}")
             else:
-                self.log("❌ Failed to create review")
+                self.ui_log("❌ Failed to create review")
 
             self.load_tree()
             return
@@ -591,7 +591,7 @@ Prompt Suggestions:
             elif node_type == "version":
                 version_id = data.get("version_id")
             else:
-                self.log("Run Iteration requires a Version or Review selected")
+                self.ui_log("Run Iteration requires a Version or Review selected")
                 return
 
             result = api_post("/reviews", {
@@ -600,9 +600,9 @@ Prompt Suggestions:
                 "user_context": context
             })
             if result:
-                self.log(f"✅ Iteration-style review created: {ensure_alias('review', result.get('review_id', ''))}")
+                self.ui_log(f"✅ Iteration-style review created: {ensure_alias('review', result.get('review_id', ''))}")
             else:
-                self.log("❌ Failed to create iteration review")
+                self.ui_log("❌ Failed to create iteration review")
 
             self.load_tree()
             return
@@ -613,44 +613,44 @@ Prompt Suggestions:
             elif node_type == "review":
                 version_id = data.get("version_id")
             else:
-                self.log("Run Reconcile requires a Version or Review selected")
+                self.ui_log("Run Reconcile requires a Version or Review selected")
                 return
 
             reviews = api_get("/reviews")
             version_reviews = [r for r in reviews if r.get("version_id") == version_id]
 
             if len(version_reviews) < 2:
-                self.log("⚠️ Need at least 2 reviews on the selected version")
+                self.ui_log("⚠️ Need at least 2 reviews on the selected version")
                 return
 
             review_ids = [r["review_id"] for r in version_reviews[-2:]]
             result = api_post("/reconciliation", {"review_ids": review_ids})
 
             if result:
-                self.log(f"✅ Reconciliation created: {ensure_alias('reconciliation', result.get('recon_id', ''))}")
+                self.ui_log(f"✅ Reconciliation created: {ensure_alias('reconciliation', result.get('recon_id', ''))}")
             else:
-                self.log("❌ Failed to create reconciliation")
+                self.ui_log("❌ Failed to create reconciliation")
 
             self.load_tree()
             return
 
         if event.button.id == "btn_proposal":
             if node_type != "reconciliation":
-                self.log("Run Proposal requires a Reconciliation selected")
+                self.ui_log("Run Proposal requires a Reconciliation selected")
                 return
 
             result = api_post("/proposal", {"recon_id": data["recon_id"]})
             if result:
-                self.log(f"✅ Proposal created: {ensure_alias('proposal', result.get('proposal_id', ''))}")
+                self.ui_log(f"✅ Proposal created: {ensure_alias('proposal', result.get('proposal_id', ''))}")
             else:
-                self.log("❌ Failed to create proposal")
+                self.ui_log("❌ Failed to create proposal")
 
             self.load_tree()
             return
 
         if event.button.id == "btn_learning":
             if node_type != "proposal":
-                self.log("Run Learning requires a Proposal selected")
+                self.ui_log("Run Learning requires a Proposal selected")
                 return
 
             result = api_post("/learning", {
@@ -658,9 +658,9 @@ Prompt Suggestions:
                 "source_id": data["proposal_id"]
             })
             if result:
-                self.log(f"✅ Learning created: {ensure_alias('learning', result.get('learning_id', ''))}")
+                self.ui_log(f"✅ Learning created: {ensure_alias('learning', result.get('learning_id', ''))}")
             else:
-                self.log("❌ Failed to create learning")
+                self.ui_log("❌ Failed to create learning")
 
             self.load_tree()
             return
@@ -669,12 +669,12 @@ Prompt Suggestions:
             self.compare_mode = True
             self.compare_nodes = []
             self.compare_output.update("Compare mode ON\nSelect A and B nodes of the same type")
-            self.log("Compare mode ON")
+            self.ui_log("Compare mode ON")
             return
 
         if event.button.id == "btn_refresh":
             self.load_tree()
-            self.log("Refreshed")
+            self.ui_log("Refreshed")
             return
 
     # -----------------------------------------------------
