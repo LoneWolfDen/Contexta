@@ -1,13 +1,12 @@
 from textual.app import App, ComposeResult
-from textual.widgets import (
-    Header, Footer, Tree, Static, Input, Button, Label
-)
+from textual.widgets import Header, Footer, Tree, Static, Input, Button, Label
 from textual.containers import Horizontal, Vertical
 from pathlib import Path
 from datetime import datetime
 import requests
 import json
 import re
+from typing import Any, Dict, List
 
 BASE_URL = "http://localhost:5000"
 
@@ -17,21 +16,146 @@ ALIASES_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # =========================================================
+# Safe JSON / payload helpers
+# =========================================================
+
+
+def to_dict(value: Any) -> Dict[str, Any]:
+    """Convert JSON string or dict-like payload into a dict."""
+    if value is None:
+        return {}
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return {}
+        try:
+            parsed = json.loads(value)
+            return parsed if isinstance(parsed, dict) else {}
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
+
+def to_list(value: Any) -> List[Any]:
+    """Convert JSON string or list-like payload into a list."""
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return []
+        try:
+            parsed = json.loads(value)
+            return parsed if isinstance(parsed, list) else []
+        except json.JSONDecodeError:
+            return []
+    return []
+
+
+
+def parsed_json(value: Any) -> Any:
+    """Parse JSON string and return original value if not JSON."""
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return value
+        if text.startswith("{") or text.startswith("["):
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                return value
+    return value
+
+
+
+def normalize_payload(value: Any) -> Any:
+    """Recursively normalize nested JSON strings inside dicts/lists."""
+    value = parsed_json(value)
+
+    if isinstance(value, dict):
+        return {k: normalize_payload(v) for k, v in value.items()}
+
+    if isinstance(value, list):
+        return [normalize_payload(v) for v in value]
+
+    return value
+
+
+
+def ensure_entity_shape(obj: Any, entity_type: str = "") -> Dict[str, Any]:
+    """
+    Make API objects safe for UI access.
+    This fixes: TypeError: string indices must be integers, not 'str'
+    """
+    data = normalize_payload(obj)
+    if not isinstance(data, dict):
+        return {}
+
+    if entity_type == "version":
+        data["version_summary"] = to_dict(data.get("version_summary"))
+
+    elif entity_type == "review":
+        data["result"] = to_dict(data.get("result"))
+        data["personas"] = to_list(data.get("personas"))
+        result = data["result"]
+        result["summary"] = to_dict(result.get("summary"))
+        result["weaknesses"] = to_list(result.get("weaknesses"))
+        result["personas"] = to_list(result.get("personas"))
+
+    elif entity_type == "reconciliation":
+        data["merged_weaknesses"] = to_list(data.get("merged_weaknesses"))
+        data["summary"] = to_dict(data.get("summary"))
+        data["review_ids"] = to_list(data.get("review_ids"))
+        data["source_reviews"] = to_list(data.get("source_reviews"))
+
+    elif entity_type == "proposal":
+        data["summary"] = to_dict(data.get("summary"))
+        data["recommendations"] = to_list(data.get("recommendations"))
+
+    elif entity_type == "learning":
+        data["insights"] = to_list(data.get("insights"))
+        data["reusable_patterns"] = to_list(data.get("reusable_patterns"))
+        data["suggested_prompt_updates"] = to_list(data.get("suggested_prompt_updates"))
+
+    return data
+
+
+
+def normalize_entity_list(items: Any, entity_type: str) -> List[Dict[str, Any]]:
+    items = normalize_payload(items)
+    if not isinstance(items, list):
+        return []
+    return [ensure_entity_shape(item, entity_type) for item in items if isinstance(normalize_payload(item), dict)]
+
+
+# =========================================================
 # API helpers
 # =========================================================
+
 
 def api_get(path):
     try:
         r = requests.get(f"{BASE_URL}{path}")
-        return r.json() if r.ok else []
+        if not r.ok:
+            return []
+        payload = normalize_payload(r.json())
+        return payload if isinstance(payload, list) else payload
     except Exception:
         return []
+
 
 
 def api_post(path, payload):
     try:
         r = requests.post(f"{BASE_URL}{path}", json=payload)
-        return r.json() if r.ok else None
+        if not r.ok:
+            return None
+        return normalize_payload(r.json())
     except Exception:
         return None
 
@@ -40,6 +164,7 @@ def api_post(path, payload):
 # Alias helpers
 # =========================================================
 
+
 def load_aliases():
     if not ALIASES_FILE.exists():
         return {}
@@ -47,13 +172,16 @@ def load_aliases():
         return json.load(f)
 
 
+
 def save_aliases(data):
     with open(ALIASES_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
 
+
 def ts():
     return datetime.now().strftime("%d%m%Y_%H%M%S")
+
 
 
 def slug(text: str, fallback: str = "Item"):
@@ -64,7 +192,9 @@ def slug(text: str, fallback: str = "Item"):
     return cleaned or fallback
 
 
+
 def derive_persona_tag(personas):
+    personas = to_list(personas)
     if not personas:
         return "Base"
 
@@ -76,13 +206,15 @@ def derive_persona_tag(personas):
 
     parts = []
     for p in personas:
-        parts.append(short_map.get(p, slug(p, "Ctx")[:6]))
+        parts.append(short_map.get(str(p), slug(str(p), "Ctx")[:6]))
 
     return "+".join(parts)
 
 
+
 def alias_key(obj_type: str, obj_id: str):
     return f"{obj_type}:{obj_id}"
+
 
 
 def count_existing(aliases, prefix):
@@ -91,6 +223,7 @@ def count_existing(aliases, prefix):
         if isinstance(val, dict) and val.get("full", "").startswith(prefix):
             count += 1
     return count + 1
+
 
 
 def register_alias(obj_type: str, obj_id: str, display_label: str, full_alias: str):
@@ -105,12 +238,21 @@ def register_alias(obj_type: str, obj_id: str, display_label: str, full_alias: s
     return aliases[key]
 
 
+
 def get_alias(obj_type: str, obj_id: str):
     aliases = load_aliases()
     return aliases.get(alias_key(obj_type, obj_id))
 
 
+
+def get_alias_display(obj_type: str, obj_id: str, fallback: str = ""):
+    alias = get_alias(obj_type, obj_id)
+    return alias["display"] if alias else fallback
+
+
+
 def ensure_project_alias(project):
+    project = ensure_entity_shape(project, "project")
     obj_id = project.get("project_id", "")
     project_name = project.get("name", "Project")
     existing = get_alias("project", obj_id)
@@ -122,7 +264,10 @@ def ensure_project_alias(project):
     return register_alias("project", obj_id, display, full_alias)
 
 
+
 def ensure_version_alias(version, project):
+    version = ensure_entity_shape(version, "version")
+    project = ensure_entity_shape(project, "project")
     obj_id = version.get("version_id", "")
     existing = get_alias("version", obj_id)
     if existing:
@@ -136,7 +281,9 @@ def ensure_version_alias(version, project):
     return register_alias("version", obj_id, display, full_alias)
 
 
+
 def ensure_review_alias(review, version_alias_display):
+    review = ensure_entity_shape(review, "review")
     obj_id = review.get("review_id", "")
     existing = get_alias("review", obj_id)
     if existing:
@@ -146,14 +293,16 @@ def ensure_review_alias(review, version_alias_display):
     persons = review.get("personas") or review.get("result", {}).get("personas", [])
     tag = derive_persona_tag(persons)
 
-    version_tag = version_alias_display.replace("📦 ", "")
+    version_tag = str(version_alias_display).replace("📦 ", "") or "V?"
     idx = count_existing(aliases, f"Review_{version_tag}_")
     full_alias = f"Review_{version_tag}_{tag}_{ts()}_{idx:02d}"
     display = f"📝 R[{tag}]-{idx:02d}"
     return register_alias("review", obj_id, display, full_alias)
 
 
+
 def ensure_recon_alias(recon, version_alias_display, version_review_aliases):
+    recon = ensure_entity_shape(recon, "reconciliation")
     obj_id = recon.get("recon_id", "")
     existing = get_alias("reconciliation", obj_id)
     if existing:
@@ -169,35 +318,39 @@ def ensure_recon_alias(recon, version_alias_display, version_review_aliases):
             short_review_tokens.append(a["display"].replace("📝 ", "").replace("R[", "R").replace("]", ""))
     review_part = "_".join(short_review_tokens) if short_review_tokens else "R1_R2"
 
-    version_tag = version_alias_display.replace("📦 ", "")
+    version_tag = str(version_alias_display).replace("📦 ", "") or "V?"
     idx = count_existing(aliases, f"Reconciliation_{version_tag}_")
     full_alias = f"Reconciliation_{version_tag}_{review_part}_{ts()}_{idx:02d}"
     display = f"🔗 Recon[{version_tag}_{review_part}]-{idx:02d}"
     return register_alias("reconciliation", obj_id, display, full_alias)
 
 
+
 def ensure_proposal_alias(proposal, recon_alias_display):
+    proposal = ensure_entity_shape(proposal, "proposal")
     obj_id = proposal.get("proposal_id", "")
     existing = get_alias("proposal", obj_id)
     if existing:
         return existing
 
     aliases = load_aliases()
-    recon_tag = recon_alias_display.replace("🔗 ", "")
+    recon_tag = str(recon_alias_display).replace("🔗 ", "") or "Recon"
     idx = count_existing(aliases, "Proposal_")
     full_alias = f"Proposal_{slug(recon_tag, 'Recon')}_{ts()}_{idx:02d}"
     display = f"📄 Prop[{recon_tag}]-{idx:02d}"
     return register_alias("proposal", obj_id, display, full_alias)
 
 
+
 def ensure_learning_alias(learning, proposal_alias_display):
+    learning = ensure_entity_shape(learning, "learning")
     obj_id = learning.get("learning_id", "")
     existing = get_alias("learning", obj_id)
     if existing:
         return existing
 
     aliases = load_aliases()
-    prop_tag = proposal_alias_display.replace("📄 ", "")
+    prop_tag = str(proposal_alias_display).replace("📄 ", "") or "Proposal"
     idx = count_existing(aliases, "Learning_")
     full_alias = f"Learning_{slug(prop_tag, 'Proposal')}_{ts()}_{idx:02d}"
     display = f"📘 Learn[{prop_tag}]-{idx:02d}"
@@ -208,27 +361,57 @@ def ensure_learning_alias(learning, proposal_alias_display):
 # Friendly display helpers
 # =========================================================
 
+
 def friendly_category(cat):
     if not cat:
         return "Other"
-    if "missing_information" in cat:
+    if "missing_information" in str(cat):
         return "Missing key inputs"
-    if "missing_security_context" in cat:
+    if "missing_security_context" in str(cat):
         return "Security gaps"
-    return cat.replace("_", " ").title()
+    return str(cat).replace("_", " ").title()
+
 
 
 def first_sentence(text):
     if not text:
         return ""
-    parts = str(text).split(".")
+    text = str(text).strip()
+    if not text:
+        return ""
+    parts = text.split(".")
     first = parts[0].strip()
-    return first + ("." if first else "")
+    return first + ("." if first and not first.endswith(".") else "")
+
+
+
+def bullet_lines(values, field=None, limit=None, formatter=None):
+    values = to_list(values)
+    if limit is not None:
+        values = values[:limit]
+    if not values:
+        return "None"
+
+    lines = []
+    for item in values:
+        if formatter:
+            rendered = formatter(item)
+        elif field and isinstance(item, dict):
+            rendered = item.get(field, "")
+        else:
+            rendered = str(item)
+
+        rendered = str(rendered).strip()
+        if rendered:
+            lines.append(f"- {rendered}")
+
+    return "\n".join(lines) if lines else "None"
 
 
 # =========================================================
 # Main App
 # =========================================================
+
 
 class ContextaOperatorConsole(App):
 
@@ -315,21 +498,17 @@ class ContextaOperatorConsole(App):
         yield Header(show_clock=True)
 
         with Horizontal(id="body"):
-
             with Vertical(id="left_panel"):
                 yield Static("Pipeline Explorer", classes="section_title")
                 yield Tree("Contexta Pipeline", id="pipeline_tree")
 
             with Vertical(id="right_panel"):
-
                 with Horizontal(id="top_right"):
-
                     with Vertical(id="details_panel"):
                         yield Static("Details", classes="section_title")
                         yield Static("Select a node from the tree", id="details_output")
 
                     with Vertical(id="analysis_panel"):
-
                         with Vertical(id="compare_panel"):
                             yield Static("Compare", classes="section_title")
                             yield Static("Press Compare Mode, then select A and B nodes", id="compare_output")
@@ -386,7 +565,7 @@ class ContextaOperatorConsole(App):
     # -----------------------------------------------------
 
     def ui_log(self, text):
-        self.log_output.update(text)
+        self.log_output.update(str(text))
 
     # -----------------------------------------------------
     # Tree loading
@@ -398,12 +577,12 @@ class ContextaOperatorConsole(App):
         root.label = "Contexta Pipeline"
         root.expand()
 
-        projects = api_get("/projects")
-        versions = api_get("/versions")
-        reviews = api_get("/reviews")
-        recons = api_get("/reconciliation")
-        proposals = api_get("/proposal")
-        learning_items = api_get("/learning")
+        projects = normalize_entity_list(api_get("/projects"), "project")
+        versions = normalize_entity_list(api_get("/versions"), "version")
+        reviews = normalize_entity_list(api_get("/reviews"), "review")
+        recons = normalize_entity_list(api_get("/reconciliation"), "reconciliation")
+        proposals = normalize_entity_list(api_get("/proposal"), "proposal")
+        learning_items = normalize_entity_list(api_get("/learning"), "learning")
 
         for project in projects:
             p_alias = ensure_project_alias(project)
@@ -426,7 +605,7 @@ class ContextaOperatorConsole(App):
                 )
 
                 version_reviews = [r for r in reviews if r.get("version_id") == v_id]
-                review_ids = [r.get("review_id") for r in version_reviews]
+                review_ids = [r.get("review_id") for r in version_reviews if r.get("review_id")]
 
                 reviews_group = v_node.add("📝 Reviews", None)
 
@@ -453,19 +632,18 @@ class ContextaOperatorConsole(App):
                 proposal_group = v_node.add("📄 Proposals", None)
                 matched_props = []
 
-                recon_ids = [r.get("recon_id") for r in matched_recons]
+                recon_ids = [r.get("recon_id") for r in matched_recons if r.get("recon_id")]
 
                 for proposal in proposals:
                     if proposal.get("source_type") == "reconciliation" and proposal.get("source_id") in recon_ids:
-                        # find related recon alias
                         related_recon = next((x for x in matched_recons if x.get("recon_id") == proposal.get("source_id")), None)
                         recon_alias = ensure_recon_alias(related_recon, v_alias["display"], review_ids) if related_recon else {"display": "Recon"}
-                        p_alias = ensure_proposal_alias(proposal, recon_alias["display"])
+                        prop_alias = ensure_proposal_alias(proposal, recon_alias["display"])
                         proposal_group.add(
-                            p_alias["display"],
+                            prop_alias["display"],
                             data=("proposal", proposal)
                         )
-                        matched_props.append((proposal, p_alias))
+                        matched_props.append((proposal, prop_alias))
 
                 learning_group = v_node.add("📘 Learning", None)
 
@@ -490,6 +668,7 @@ class ContextaOperatorConsole(App):
             return
 
         node_type, data = node.data
+        data = ensure_entity_shape(data, node_type)
         self.update_selected_scope(node_type, data)
 
         if self.compare_mode and node_type in {"review", "proposal", "learning"}:
@@ -515,8 +694,11 @@ class ContextaOperatorConsole(App):
     # -----------------------------------------------------
 
     def format_scope_label(self, node_type, data):
+        data = ensure_entity_shape(data, node_type)
+
         if node_type == "project":
-            return data.get("name", data.get("project_id", "Project"))
+            alias = get_alias("project", data.get("project_id", ""))
+            return alias["display"] if alias else data.get("name", data.get("project_id", "Project"))
         if node_type == "version":
             a = get_alias("version", data.get("version_id", ""))
             return a["display"] if a else data.get("version_id", "")
@@ -555,127 +737,136 @@ class ContextaOperatorConsole(App):
     # -----------------------------------------------------
 
     def render_details(self, node_type, data):
+        data = ensure_entity_shape(data, node_type)
+
         if node_type == "project":
             text = f"""PROJECT
 -------
 Display: {self.format_scope_label(node_type, data)}
-Name: {data.get("name", "")}
-Project ID: {data.get("project_id", "")}
-Created: {data.get("created_at", "")}
+Name: {data.get('name', '')}
+Project ID: {data.get('project_id', '')}
+Created: {data.get('created_at', '')}
 """
         elif node_type == "version":
             alias = get_alias("version", data.get("version_id", "")) or {}
-            summary = data.get("version_summary", {})
+            summary = to_dict(data.get("version_summary"))
+            missing_info = bullet_lines(summary.get("missing_information"))
             text = f"""VERSION
 -------
-Display: {alias.get("display", "")}
-Full: {alias.get("full", "")}
-Version ID: {data.get("version_id", "")}
+Display: {alias.get('display', '')}
+Full: {alias.get('full', '')}
+Version ID: {data.get('version_id', '')}
 
 Client Ask:
-{summary.get("client_ask", "")}
+{summary.get('client_ask', '')}
 
 Architecture:
-{summary.get("architecture_understanding", "")}
+{summary.get('architecture_understanding', '')}
 
 Missing Information:
-{chr(10).join("- " + x for x in summary.get("missing_information", [])) if summary.get("missing_information") else "None"}
+{missing_info}
 """
         elif node_type == "review":
             alias = get_alias("review", data.get("review_id", "")) or {}
-            result = data.get("result", {})
-            summary = result.get("summary", {})
-            weaknesses = result.get("weaknesses", [])
-            personas = data.get("personas") or result.get("personas", [])
+            result = to_dict(data.get("result"))
+            summary = to_dict(result.get("summary"))
+            weaknesses = to_list(result.get("weaknesses"))
+            personas = to_list(data.get("personas") or result.get("personas"))
 
-            weakness_lines = "\n".join(
-                f"- {friendly_category(w.get('category'))}: {first_sentence(w.get('description', ''))}"
-                for w in weaknesses[:5]
-            ) or "None"
+            weakness_lines = bullet_lines(
+                weaknesses,
+                limit=5,
+                formatter=lambda w: f"{friendly_category(w.get('category'))}: {first_sentence(w.get('description', ''))}" if isinstance(w, dict) else str(w)
+            )
 
             text = f"""REVIEW
 ------
-Display: {alias.get("display", "")}
-Full: {alias.get("full", "")}
-Review ID: {data.get("review_id", "")}
-Version ID: {data.get("version_id", "")}
-Status: {data.get("status", "")}
-Personas: {", ".join(personas) if personas else "None"}
+Display: {alias.get('display', '')}
+Full: {alias.get('full', '')}
+Review ID: {data.get('review_id', '')}
+Version ID: {data.get('version_id', '')}
+Status: {data.get('status', '')}
+Personas: {', '.join(str(p) for p in personas) if personas else 'None'}
 
 Overall Assessment:
-{summary.get("overall_assessment", "")}
+{summary.get('overall_assessment', '')}
 
 Top Weaknesses:
 {weakness_lines}
 """
         elif node_type == "reconciliation":
             alias = get_alias("reconciliation", data.get("recon_id", "")) or {}
-            merged = data.get("merged_weaknesses", [])
-            summary = data.get("summary", {})
+            merged = to_list(data.get("merged_weaknesses"))
+            summary = to_dict(data.get("summary"))
+            source_reviews = to_list(data.get("source_reviews"))
 
-            risk_lines = "\n".join(
-                f"- {friendly_category(w.get('category'))}: severity={w.get('severity', '')}, count={w.get('count', 0)}"
-                for w in merged[:5]
-            ) or "None"
+            risk_lines = bullet_lines(
+                merged,
+                limit=5,
+                formatter=lambda w: f"{friendly_category(w.get('category'))}: severity={w.get('severity', '')}, count={w.get('count', 0)}" if isinstance(w, dict) else str(w)
+            )
+
+            consensus = bullet_lines(summary.get("consensus_findings"))
 
             text = f"""RECONCILIATION
 --------------
-Display: {alias.get("display", "")}
-Full: {alias.get("full", "")}
-Recon ID: {data.get("recon_id", "")}
-Source Reviews: {", ".join(data.get("source_reviews", []))}
+Display: {alias.get('display', '')}
+Full: {alias.get('full', '')}
+Recon ID: {data.get('recon_id', '')}
+Source Reviews: {', '.join(source_reviews) if source_reviews else 'None'}
 
 Merged Weaknesses:
 {risk_lines}
 
 Consensus Findings:
-{", ".join(summary.get("consensus_findings", [])) if summary.get("consensus_findings") else "None"}
+{consensus}
 """
         elif node_type == "proposal":
             alias = get_alias("proposal", data.get("proposal_id", "")) or {}
-            summary = data.get("summary", {})
-            recs = data.get("recommendations", [])
+            summary = to_dict(data.get("summary"))
+            recs = to_list(data.get("recommendations"))
 
-            rec_lines = "\n".join(
-                f"- {friendly_category(r.get('category'))}: {first_sentence(r.get('recommendation', ''))}"
-                for r in recs[:5]
-            ) or "None"
+            rec_lines = bullet_lines(
+                recs,
+                limit=5,
+                formatter=lambda r: f"{friendly_category(r.get('category'))}: {first_sentence(r.get('recommendation', ''))}" if isinstance(r, dict) else str(r)
+            )
 
             text = f"""PROPOSAL
 --------
-Display: {alias.get("display", "")}
-Full: {alias.get("full", "")}
-Proposal ID: {data.get("proposal_id", "")}
-Source Type: {data.get("source_type", "")}
-Source ID: {data.get("source_id", "")}
+Display: {alias.get('display', '')}
+Full: {alias.get('full', '')}
+Proposal ID: {data.get('proposal_id', '')}
+Source Type: {data.get('source_type', '')}
+Source ID: {data.get('source_id', '')}
 
 Executive Summary:
-{summary.get("executive_summary", "")}
+{summary.get('executive_summary', '')}
 
 Recommended Solution:
-{summary.get("recommended_solution", "")}
+{summary.get('recommended_solution', '')}
 
 Top Recommendations:
 {rec_lines}
 """
         elif node_type == "learning":
             alias = get_alias("learning", data.get("learning_id", "")) or {}
-            insights = data.get("insights", [])
-            patterns = data.get("reusable_patterns", [])
-            suggestions = data.get("suggested_prompt_updates", [])
+            insights = to_list(data.get("insights"))
+            patterns = to_list(data.get("reusable_patterns"))
+            suggestions = to_list(data.get("suggested_prompt_updates"))
 
-            insight_lines = "\n".join(f"- {first_sentence(i.get('detail', ''))}" for i in insights[:3]) or "None"
-            pattern_lines = "\n".join(f"- {p.get('pattern', '')}" for p in patterns[:3]) or "None"
-            suggestion_lines = "\n".join(f"- {first_sentence(s.get('suggestion', ''))}" for s in suggestions[:3]) or "None"
+            insight_lines = bullet_lines(insights, limit=3, formatter=lambda i: first_sentence(i.get('detail', '')) if isinstance(i, dict) else str(i))
+            pattern_lines = bullet_lines(patterns, limit=3, formatter=lambda p: p.get('pattern', '') if isinstance(p, dict) else str(p))
+            suggestion_lines = bullet_lines(suggestions, limit=3, formatter=lambda s: first_sentence(s.get('suggestion', '')) if isinstance(s, dict) else str(s))
 
             text = f"""LEARNING
 --------
-Display: {alias.get("display", "")}
-Full: {alias.get("full", "")}
-Learning ID: {data.get("learning_id", "")}
-Source Type: {data.get("source_type", "")}
-Source ID: {data.get("source_id", "")}
-Approved: {data.get("approved", False)}
+Display: {alias.get('display', '')}
+Full: {alias.get('full', '')}
+Learning ID: {data.get('learning_id', '')}
+Source Type: {data.get('source_type', '')}
+Source ID: {data.get('source_id', '')}
+Approved: {data.get('approved', False)}
 
 Insights:
 {insight_lines}
@@ -687,26 +878,28 @@ Prompt Suggestions:
 {suggestion_lines}
 """
         else:
-            text = json.dumps(data, indent=2)
+            text = json.dumps(data, indent=2, ensure_ascii=False)
 
         self.details_output.update(text)
 
     def render_learning_panel(self, node_type, data):
+        data = ensure_entity_shape(data, node_type)
+
         if node_type == "learning":
-            insights = data.get("insights", [])
-            patterns = data.get("reusable_patterns", [])
-            text = "Insights:\n" + ("\n".join(f"- {first_sentence(i.get('detail', ''))}" for i in insights[:5]) or "None")
-            text += "\n\nPatterns:\n" + ("\n".join(f"- {p.get('pattern', '')}" for p in patterns[:5]) or "None")
+            insights = to_list(data.get("insights"))
+            patterns = to_list(data.get("reusable_patterns"))
+            text = "Insights:\n" + bullet_lines(insights, limit=5, formatter=lambda i: first_sentence(i.get('detail', '')) if isinstance(i, dict) else str(i))
+            text += "\n\nPatterns:\n" + bullet_lines(patterns, limit=5, formatter=lambda p: p.get('pattern', '') if isinstance(p, dict) else str(p))
             self.learning_output.update(text)
             return
 
         if node_type == "proposal":
-            learning_items = api_get("/learning")
+            learning_items = normalize_entity_list(api_get("/learning"), "learning")
             related = [l for l in learning_items if l.get("source_type") == "proposal" and l.get("source_id") == data.get("proposal_id")]
             if related:
                 latest = related[-1]
-                insights = latest.get("insights", [])
-                text = "Related Learning:\n" + ("\n".join(f"- {first_sentence(i.get('detail', ''))}" for i in insights[:5]) or "None")
+                insights = to_list(latest.get("insights"))
+                text = "Related Learning:\n" + bullet_lines(insights, limit=5, formatter=lambda i: first_sentence(i.get('detail', '')) if isinstance(i, dict) else str(i))
                 self.learning_output.update(text)
             else:
                 self.learning_output.update("No learning linked to this proposal yet.")
@@ -725,6 +918,7 @@ Prompt Suggestions:
             return
 
         node_type, data = node.data
+        data = ensure_entity_shape(data, node_type)
         personas = [p.strip() for p in self.input_personas.value.split(",") if p.strip()]
         context = self.input_context.value.strip()
 
@@ -733,9 +927,10 @@ Prompt Suggestions:
                 self.ui_log("Run Review requires a Version selected")
                 return
 
-            result = api_post("/reviews", {"version_id": data["version_id"]})
+            result = ensure_entity_shape(api_post("/reviews", {"version_id": data.get("version_id")}), "review")
             if result:
-                ensure_review_alias(result, self.format_scope_label("version", data))
+                version_display = self.format_scope_label("version", data)
+                ensure_review_alias(result, version_display)
                 self.ui_log(f"✅ Review created: {self.format_scope_label('review', result)}")
             else:
                 self.ui_log("❌ Failed to create review")
@@ -748,15 +943,16 @@ Prompt Suggestions:
                 self.ui_log("Run Iteration requires a Version or Review selected")
                 return
 
-            version_id = data.get("version_id") if node_type == "review" else data.get("version_id")
+            version_id = data.get("version_id")
+            version_display = get_alias_display("version", version_id, version_id)
 
-            result = api_post("/reviews", {
+            result = ensure_entity_shape(api_post("/reviews", {
                 "version_id": version_id,
                 "personas": personas,
                 "user_context": context
-            })
+            }), "review")
             if result:
-                ensure_review_alias(result, self.format_scope_label("version", {"version_id": version_id}))
+                ensure_review_alias(result, version_display)
                 self.ui_log(f"✅ Iteration-style review created: {self.format_scope_label('review', result)}")
             else:
                 self.ui_log("❌ Failed to create iteration review")
@@ -769,19 +965,20 @@ Prompt Suggestions:
                 self.ui_log("Run Reconcile requires a Version or Review selected")
                 return
 
-            version_id = data.get("version_id") if node_type == "review" else data.get("version_id")
-            reviews = api_get("/reviews")
+            version_id = data.get("version_id")
+            version_display = get_alias_display("version", version_id, version_id)
+            reviews = normalize_entity_list(api_get("/reviews"), "review")
             version_reviews = [r for r in reviews if r.get("version_id") == version_id]
 
             if len(version_reviews) < 2:
                 self.ui_log("⚠️ Need at least 2 reviews on the selected version")
                 return
 
-            review_ids = [r["review_id"] for r in version_reviews[-2:]]
-            result = api_post("/reconciliation", {"review_ids": review_ids})
+            review_ids = [r["review_id"] for r in version_reviews[-2:] if r.get("review_id")]
+            result = ensure_entity_shape(api_post("/reconciliation", {"review_ids": review_ids}), "reconciliation")
 
             if result:
-                ensure_recon_alias(result, self.format_scope_label("version", {"version_id": version_id}), review_ids)
+                ensure_recon_alias(result, version_display, review_ids)
                 self.ui_log(f"✅ Reconciliation created: {self.format_scope_label('reconciliation', result)}")
             else:
                 self.ui_log("❌ Failed to create reconciliation")
@@ -794,7 +991,7 @@ Prompt Suggestions:
                 self.ui_log("Run Proposal requires a Reconciliation selected")
                 return
 
-            result = api_post("/proposal", {"recon_id": data["recon_id"]})
+            result = ensure_entity_shape(api_post("/proposal", {"recon_id": data.get("recon_id")}), "proposal")
             if result:
                 ensure_proposal_alias(result, self.format_scope_label("reconciliation", data))
                 self.ui_log(f"✅ Proposal created: {self.format_scope_label('proposal', result)}")
@@ -809,10 +1006,10 @@ Prompt Suggestions:
                 self.ui_log("Run Learning requires a Proposal selected")
                 return
 
-            result = api_post("/learning", {
+            result = ensure_entity_shape(api_post("/learning", {
                 "source_type": "proposal",
-                "source_id": data["proposal_id"]
-            })
+                "source_id": data.get("proposal_id")
+            }), "learning")
             if result:
                 ensure_learning_alias(result, self.format_scope_label("proposal", data))
                 self.ui_log(f"✅ Learning created: {self.format_scope_label('learning', result)}")
@@ -843,6 +1040,8 @@ Prompt Suggestions:
             return
 
         (type_a, data_a), (type_b, data_b) = self.compare_nodes
+        data_a = ensure_entity_shape(data_a, type_a)
+        data_b = ensure_entity_shape(data_b, type_b)
 
         if type_a != type_b:
             self.compare_output.update("❌ Cannot compare different node types")
@@ -852,21 +1051,24 @@ Prompt Suggestions:
             a_label = self.format_scope_label("review", data_a)
             b_label = self.format_scope_label("review", data_b)
 
-            a_summary = data_a.get("result", {}).get("summary", {}).get("overall_assessment", "")
-            b_summary = data_b.get("result", {}).get("summary", {}).get("overall_assessment", "")
+            a_result = to_dict(data_a.get("result"))
+            b_result = to_dict(data_b.get("result"))
+            a_summary = to_dict(a_result.get("summary")).get("overall_assessment", "")
+            b_summary = to_dict(b_result.get("summary")).get("overall_assessment", "")
 
-            a_weaknesses = data_a.get("result", {}).get("weaknesses", [])
-            b_weaknesses = data_b.get("result", {}).get("weaknesses", [])
+            a_weaknesses = to_list(a_result.get("weaknesses"))
+            b_weaknesses = to_list(b_result.get("weaknesses"))
 
-            a_lines = "\n".join(
-                f"- {friendly_category(w.get('category'))}: {first_sentence(w.get('description', ''))}"
-                for w in a_weaknesses[:3]
-            ) or "None"
-
-            b_lines = "\n".join(
-                f"- {friendly_category(w.get('category'))}: {first_sentence(w.get('description', ''))}"
-                for w in b_weaknesses[:3]
-            ) or "None"
+            a_lines = bullet_lines(
+                a_weaknesses,
+                limit=3,
+                formatter=lambda w: f"{friendly_category(w.get('category'))}: {first_sentence(w.get('description', ''))}" if isinstance(w, dict) else str(w)
+            )
+            b_lines = bullet_lines(
+                b_weaknesses,
+                limit=3,
+                formatter=lambda w: f"{friendly_category(w.get('category'))}: {first_sentence(w.get('description', ''))}" if isinstance(w, dict) else str(w)
+            )
 
             self.compare_output.update(f"""A = {a_label}
 {a_summary}
@@ -888,8 +1090,8 @@ Top:
             a_label = self.format_scope_label("proposal", data_a)
             b_label = self.format_scope_label("proposal", data_b)
 
-            a_summary = data_a.get("summary", {}).get("executive_summary", "")
-            b_summary = data_b.get("summary", {}).get("executive_summary", "")
+            a_summary = to_dict(data_a.get("summary")).get("executive_summary", "")
+            b_summary = to_dict(data_b.get("summary")).get("executive_summary", "")
 
             self.compare_output.update(f"""A = {a_label}
 {a_summary}
@@ -905,8 +1107,8 @@ B = {b_label}
             a_label = self.format_scope_label("learning", data_a)
             b_label = self.format_scope_label("learning", data_b)
 
-            a_insights = "\n".join(f"- {first_sentence(i.get('detail', ''))}" for i in data_a.get("insights", [])[:3]) or "None"
-            b_insights = "\n".join(f"- {first_sentence(i.get('detail', ''))}" for i in data_b.get("insights", [])[:3]) or "None"
+            a_insights = bullet_lines(to_list(data_a.get("insights"))[:3], formatter=lambda i: first_sentence(i.get('detail', '')) if isinstance(i, dict) else str(i))
+            b_insights = bullet_lines(to_list(data_b.get("insights"))[:3], formatter=lambda i: first_sentence(i.get('detail', '')) if isinstance(i, dict) else str(i))
 
             self.compare_output.update(f"""A = {a_label}
 {a_insights}
