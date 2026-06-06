@@ -45,8 +45,7 @@ def get_learning():
 # -------------------------
 
 class DetailPanel(Static):
-    content = reactive("Select an item from the left panel")
-
+   
     def update_content(self, text: str):
         self.content = text
         self.update(text)
@@ -77,6 +76,22 @@ class ContextaTUI(App):
     }
     """
 
+
+    BINDINGS = [
+    ("q", "quit", "Quit"),
+    ("c", "toggle_compare", "Compare Mode")
+    ]
+    
+    content = reactive("Select an item from the left panel")
+    compare_mode = False
+    selected_nodes = []
+
+    def action_toggle_compare(self):
+    self.compare_mode = not self.compare_mode
+    self.selected_nodes = []
+    self.notify(f"Compare mode: {self.compare_mode}")
+
+    
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
 
@@ -101,6 +116,13 @@ class ContextaTUI(App):
         reviews = get_reviews()
         proposals = get_proposals()
         learning_items = get_learning()
+        recons = safe_get("/reconciliation")
+            for recon in recons:
+                version_node.add(
+                    f"Reconciliation: {recon.get('recon_id')}",
+                    data=("reconciliation", recon)
+                )
+            
 
         root = self.artifact_tree.root
         root.remove_children()
@@ -169,20 +191,91 @@ class ContextaTUI(App):
 
         self.artifact_tree.focus()
 
+
+    # -------------------------
+    # Compare function
+    # -------------------------
+    
+    def show_comparison(self, node_a, node_b):
+    type_a, data_a = node_a.data
+    type_b, data_b = node_b.data
+
+    if type_a != type_b:
+        self.detail_panel.update_content("Cannot compare different types")
+        return
+
+    if type_a == "review":
+        a = data_a.get("result", {}).get("summary", {}).get("overall_assessment", "")
+        b = data_b.get("result", {}).get("summary", {}).get("overall_assessment", "")
+
+        text = f"""
+        
+        COMPARE (REVIEWS)
+        -----------------
+        
+        A:
+        {a}
+        
+        -----------------
+        
+        B:
+        {b}
+        """
+            else:
+                text = "Comparison not implemented for this type"
+        
+            self.detail_panel.update_content(text)
+
+
     # -------------------------
     # Selection handler
     # -------------------------
+    
+    def show_detail(self, node):
+        node_type, data = node.data
+    
+        if node_type == "review":
+            summary = data.get("result", {}).get("summary", {})
+            text = f"""
+        REVIEW
+        ------
+        {data.get("review_id")}
+        
+        {summary.get("overall_assessment", "")}
+        """
+            elif node_type == "reconciliation":
+                text = f"""
+        RECONCILIATION
+        --------------
+        {data.get("recon_id")}
+        """
+            else:
+                text = json.dumps(data, indent=2)
+        
+            self.detail_panel.update_content(text)
 
+    
     def on_tree_node_selected(self, event):
         node = event.node
-
+    
         if not node.data:
             return
+    
+        if self.compare_mode:
+            self.selected_nodes.append(node)
+    
+            if len(self.selected_nodes) == 2:
+                self.show_comparison(self.selected_nodes[0], self.selected_nodes[1])
+                self.selected_nodes = []
+                self.compare_mode = False
+            return
+    
+        self.show_detail(node)
 
-        node_type, data = node.data
 
         if node_type == "project":
             text = f"""
+
 PROJECT
 -------
 Name: {data.get("name", "")}
