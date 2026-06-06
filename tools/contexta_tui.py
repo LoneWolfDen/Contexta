@@ -1,7 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, Static, Tree
 from textual.containers import Horizontal
-from textual.reactive import reactive
+from textual.binding import Binding
 
 import requests
 import json
@@ -9,367 +9,254 @@ import json
 BASE_URL = "http://localhost:5000"
 
 
-# -------------------------
-# API helpers
-# -------------------------
+# ---------------- API HELPERS ----------------
 
-def safe_get(path: str):
-    res = requests.get(f"{BASE_URL}{path}")
-    if not res.ok:
+def api_get(path):
+    try:
+        r = requests.get(f"{BASE_URL}{path}")
+        return r.json() if r.ok else []
+    except:
         return []
-    return res.json()
 
 
-def get_projects():
-    return safe_get("/projects")
+def api_post(path, payload):
+    r = requests.post(f"{BASE_URL}{path}", json=payload)
+    if not r.ok:
+        return None
+    return r.json()
 
 
-def get_versions():
-    return safe_get("/versions")
-
-
-def get_reviews():
-    return safe_get("/reviews")
-
-
-def get_proposals():
-    return safe_get("/proposal")
-
-
-def get_learning():
-    return safe_get("/learning")
-
-
-# -------------------------
-# UI Components
-# -------------------------
+# ---------------- UI PANEL ----------------
 
 class DetailPanel(Static):
-   
-    def update_content(self, text: str):
-        self.content = text
+    def show(self, text):
         self.update(text)
 
 
-# -------------------------
-# Main App
-# -------------------------
+# ---------------- MAIN APP ----------------
 
 class ContextaTUI(App):
-    CSS = """
-    Screen {
-        layout: vertical;
-    }
-
-    #main {
-        height: 1fr;
-    }
-
-    #left {
-        width: 40%;
-        border-right: solid gray;
-    }
-
-    #right {
-        width: 60%;
-        padding: 1 2;
-    }
-    """
-
 
     BINDINGS = [
-    ("q", "quit", "Quit"),
-    ("c", "toggle_compare", "Compare Mode")
+        Binding("q", "quit", "Quit"),
+        Binding("r", "run_review", "Run Review"),
+        Binding("i", "run_iteration", "Run Iteration"),
+        Binding("c", "compare_mode", "Compare"),
+        Binding("p", "run_proposal", "Proposal"),
+        Binding("o", "run_recon", "Reconcile")
     ]
-    
-    content = reactive("Select an item from the left panel")
-    compare_mode = False
-    selected_nodes = []
 
-    def action_toggle_compare(self):
-    self.compare_mode = not self.compare_mode
-    self.selected_nodes = []
-    self.notify(f"Compare mode: {self.compare_mode}")
-
-    
     def compose(self) -> ComposeResult:
-        yield Header(show_clock=True)
+        yield Header()
 
-        with Horizontal(id="main"):
-            yield Tree("Contexta Artifact Flow", id="left")
-            yield DetailPanel("Select a node", id="right")
+        with Horizontal():
+            yield Tree("Contexta Flow", id="tree")
+            yield DetailPanel("Select node", id="detail")
 
         yield Footer()
 
     def on_mount(self):
-        self.artifact_tree = self.query_one("#left", Tree)
-        self.detail_panel = self.query_one("#right", DetailPanel)
+        self.tree = self.query_one("#tree", Tree)
+        self.detail = self.query_one("#detail", DetailPanel)
+
+        self.compare_nodes = []
+        self.compare_active = False
+
         self.load_tree()
 
-    # -------------------------
-    # Build left-side tree
-    # -------------------------
+    # ---------------- LOAD TREE ----------------
 
     def load_tree(self):
-        projects = get_projects()
-        versions = get_versions()
-        reviews = get_reviews()
-        proposals = get_proposals()
-        learning_items = get_learning()
-        recons = safe_get("/reconciliation")
-            for recon in recons:
-                version_node.add(
-                    f"Reconciliation: {recon.get('recon_id')}",
-                    data=("reconciliation", recon)
-                )
-            
-
-        root = self.artifact_tree.root
-        root.remove_children()
-        root.label = "Contexta Artifact Flow"
+        self.tree.root.remove_children()
+        root = self.tree.root
         root.expand()
 
-        # Group by project → version → review/proposal/learning
-        for project in projects:
-            project_id = project.get("project_id", "")
-            project_name = project.get("name", project_id)
+        projects = api_get("/projects")
+        versions = api_get("/versions")
+        reviews = api_get("/reviews")
+        recons = api_get("/reconciliation")
+        proposals = api_get("/proposal")
+        learning = api_get("/learning")
 
-            project_node = root.add(
-                f"Project: {project_name}",
-                data=("project", project)
+        for p in projects:
+            p_node = root.add(
+                f"📁 {p.get('name')}",
+                data=("project", p)
             )
 
-            project_versions = [v for v in versions if v.get("project_id") == project_id]
+            p_versions = [v for v in versions if v.get("project_id") == p["project_id"]]
 
-            for version in project_versions:
-                version_id = version.get("version_id", "")
-                version_node = project_node.add(
-                    f"Version: {version_id}",
-                    data=("version", version)
+            for v in p_versions:
+                v_node = p_node.add(
+                    f"📦 Version {v.get('version_id')[:6]}",
+                    data=("version", v)
                 )
 
-                version_reviews = [r for r in reviews if r.get("version_id") == version_id]
+                v_reviews = [r for r in reviews if r.get("version_id") == v["version_id"]]
 
-                # Reviews
-                for review in version_reviews:
-                    review_node = version_node.add(
-                        f"Review: {review.get('review_id', '')}",
-                        data=("review", review)
-                    )
-
-                    personas = review.get("result", {}).get("personas", []) or review.get("personas", [])
+                for r in v_reviews:
+                    personas = r.get("personas") or r.get("result", {}).get("personas", [])
+                    label = f"📝 Review {r['review_id'][:6]}"
                     if personas:
-                        review_node.add(
-                            f"Personas: {', '.join(personas)}",
-                            data=("review_meta", {"personas": personas, "review_id": review.get("review_id", "")})
+                        label += f" ({', '.join(personas)})"
+
+                    v_node.add(label, data=("review", r))
+
+                for rec in recons:
+                    if any(rid in rec.get("review_ids", []) for rid in [rv.get("review_id") for rv in v_reviews]):
+                        v_node.add(
+                            f"🔗 Recon {rec['recon_id'][:6]}",
+                            data=("recon", rec)
                         )
 
-                # Proposals (linked by references/source)
-                for proposal in proposals:
-                    refs = proposal.get("source_refs", [])
-                    proposal_source_type = proposal.get("source_type", "")
-                    if proposal_source_type == "reconciliation":
-                        # We do not have direct version linkage here, so just attach proposals under project if source refs intersect reviews in this version
-                        review_ids = {r.get("review_id") for r in version_reviews}
-                        if any(ref in review_ids for ref in refs):
-                            proposal_node = version_node.add(
-                                f"Proposal: {proposal.get('proposal_id', '')}",
-                                data=("proposal", proposal)
+                for prop in proposals:
+                    if prop.get("source_type") == "reconciliation":
+                        v_node.add(
+                            f"📄 Proposal {prop['proposal_id'][:6]}",
+                            data=("proposal", prop)
+                        )
+
+                        related_learning = [
+                            l for l in learning
+                            if l.get("source_id") == prop["proposal_id"]
+                        ]
+
+                        for l in related_learning:
+                            v_node.add(
+                                f"📘 Learning {l['learning_id'][:6]}",
+                                data=("learning", l)
                             )
 
-                            # Learning items related to this proposal
-                            related_learning = [
-                                l for l in learning_items
-                                if l.get("source_type") == "proposal" and l.get("source_id") == proposal.get("proposal_id")
-                            ]
+    # ---------------- NODE SELECT ----------------
 
-                            for learning in related_learning:
-                                proposal_node.add(
-                                    f"Learning: {learning.get('learning_id', '')}",
-                                    data=("learning", learning)
-                                )
-
-        self.artifact_tree.focus()
-
-
-    # -------------------------
-    # Compare function
-    # -------------------------
-    
-    def show_comparison(self, node_a, node_b):
-    type_a, data_a = node_a.data
-    type_b, data_b = node_b.data
-
-    if type_a != type_b:
-        self.detail_panel.update_content("Cannot compare different types")
-        return
-
-    if type_a == "review":
-        a = data_a.get("result", {}).get("summary", {}).get("overall_assessment", "")
-        b = data_b.get("result", {}).get("summary", {}).get("overall_assessment", "")
-
-        text = f"""
-        
-        COMPARE (REVIEWS)
-        -----------------
-        
-        A:
-        {a}
-        
-        -----------------
-        
-        B:
-        {b}
-        """
-            else:
-                text = "Comparison not implemented for this type"
-        
-            self.detail_panel.update_content(text)
-
-
-    # -------------------------
-    # Selection handler
-    # -------------------------
-    
-    def show_detail(self, node):
-        node_type, data = node.data
-    
-        if node_type == "review":
-            summary = data.get("result", {}).get("summary", {})
-            text = f"""
-        REVIEW
-        ------
-        {data.get("review_id")}
-        
-        {summary.get("overall_assessment", "")}
-        """
-            elif node_type == "reconciliation":
-                text = f"""
-        RECONCILIATION
-        --------------
-        {data.get("recon_id")}
-        """
-            else:
-                text = json.dumps(data, indent=2)
-        
-            self.detail_panel.update_content(text)
-
-    
     def on_tree_node_selected(self, event):
         node = event.node
-    
+
         if not node.data:
             return
-    
-        if self.compare_mode:
-            self.selected_nodes.append(node)
-    
-            if len(self.selected_nodes) == 2:
-                self.show_comparison(self.selected_nodes[0], self.selected_nodes[1])
-                self.selected_nodes = []
-                self.compare_mode = False
+
+        if self.compare_active:
+            self.compare_nodes.append(node)
+
+            if len(self.compare_nodes) == 2:
+                self.show_compare()
+                self.compare_nodes = []
+                self.compare_active = False
             return
-    
-        self.show_detail(node)
 
+        self.show_detail(node.data)
 
-        if node_type == "project":
-            text = f"""
+    # ---------------- DETAIL VIEW ----------------
 
-PROJECT
--------
-Name: {data.get("name", "")}
-Project ID: {data.get("project_id", "")}
-Created: {data.get("created_at", "")}
-"""
-        elif node_type == "version":
-            summary = data.get("version_summary", {})
-            text = f"""
-VERSION
--------
-Version ID: {data.get("version_id", "")}
-Project ID: {data.get("project_id", "")}
+    def show_detail(self, node_data):
+        node_type, data = node_data
 
-Version Summary:
-Client Ask: {summary.get("client_ask", "")}
-Architecture: {summary.get("architecture_understanding", "")}
-Missing Info: {", ".join(summary.get("missing_information", []))}
-"""
-        elif node_type == "review":
-            result = data.get("result", {})
-            summary = result.get("summary", {})
-            weaknesses = result.get("weaknesses", [])
-            personas = result.get("personas", []) or data.get("personas", [])
+        if node_type == "review":
+            summary = data.get("result", {}).get("summary", {})
+            txt = f"""
+REVIEW {data.get("review_id")}
 
-            text = f"""
-REVIEW
-------
-Review ID: {data.get("review_id", "")}
-Version ID: {data.get("version_id", "")}
-Status: {data.get("status", "")}
-Personas: {", ".join(personas) if personas else "None"}
-
-Overall Assessment:
 {summary.get("overall_assessment", "")}
-
-Weakness Count: {len(weaknesses)}
-"""
-        elif node_type == "review_meta":
-            text = f"""
-REVIEW PERSONAS
----------------
-Review ID: {data.get("review_id", "")}
-Personas: {", ".join(data.get("personas", []))}
 """
         elif node_type == "proposal":
-            summary = data.get("summary", {})
-            recommendations = data.get("recommendations", [])
-
-            text = f"""
-PROPOSAL
---------
-Proposal ID: {data.get("proposal_id", "")}
-Source Type: {data.get("source_type", "")}
-Source ID: {data.get("source_id", "")}
-
-Executive Summary:
-{summary.get("executive_summary", "")}
-
-Recommended Solution:
-{summary.get("recommended_solution", "")}
-
-Recommendations Count: {len(recommendations)}
-"""
+            txt = data.get("summary", {}).get("executive_summary", "")
+        elif node_type == "recon":
+            txt = json.dumps(data, indent=2)
         elif node_type == "learning":
-            insights = data.get("insights", [])
-            patterns = data.get("reusable_patterns", [])
+            insights = [i.get("detail") for i in data.get("insights", [])]
+            txt = "\n".join(insights[:3])
+        else:
+            txt = json.dumps(data, indent=2)
 
-            insight_lines = "\n".join(
-                f"- {i.get('detail', '')}" for i in insights[:3]
-            ) or "None"
+        self.detail.show(txt)
 
-            pattern_lines = "\n".join(
-                f"- {p.get('pattern', '')}" for p in patterns[:3]
-            ) or "None"
+    # ---------------- ACTIONS ----------------
 
-            text = f"""
-LEARNING
---------
-Learning ID: {data.get("learning_id", "")}
-Source Type: {data.get("source_type", "")}
-Source ID: {data.get("source_id", "")}
-Approved: {data.get("approved", False)}
+    def action_run_review(self):
+        node = self.tree.cursor_node
+        if not node or node.data[0] != "version":
+            self.notify("Select a version first")
+            return
 
-Insights:
-{insight_lines}
+        version_id = node.data[1]["version_id"]
+        result = api_post("/reviews", {"version_id": version_id})
 
-Reusable Patterns:
-{pattern_lines}
+        self.notify("Review created" if result else "Error")
+        self.load_tree()
+
+    def action_run_iteration(self):
+        node = self.tree.cursor_node
+        if not node or node.data[0] != "version":
+            self.notify("Select a version first")
+            return
+
+        version_id = node.data[1]["version_id"]
+
+        result = api_post("/reviews", {
+            "version_id": version_id,
+            "personas": ["Architect", "Security"],
+            "user_context": "Focus on risks"
+        })
+
+        self.notify("Iteration created" if result else "Error")
+        self.load_tree()
+
+    def action_run_recon(self):
+        reviews = api_get("/reviews")
+        if len(reviews) < 2:
+            self.notify("Need at least 2 reviews")
+            return
+
+        ids = [reviews[-1]["review_id"], reviews[-2]["review_id"]]
+        result = api_post("/reconciliation", {"review_ids": ids})
+
+        self.notify("Reconciliation created" if result else "Error")
+        self.load_tree()
+
+    def action_run_proposal(self):
+        recons = api_get("/reconciliation")
+        if not recons:
+            self.notify("No reconciliation found")
+            return
+
+        recon_id = recons[-1]["recon_id"]
+        result = api_post("/proposal", {"recon_id": recon_id})
+
+        self.notify("Proposal created" if result else "Error")
+        self.load_tree()
+
+    def action_compare_mode(self):
+        self.compare_active = True
+        self.compare_nodes = []
+        self.notify("Select 2 nodes to compare")
+
+    # ---------------- COMPARE ----------------
+
+    def show_compare(self):
+        n1 = self.compare_nodes[0].data
+        n2 = self.compare_nodes[1].data
+
+        if not n1 or not n2 or n1[0] != n2[0]:
+            self.detail.show("Cannot compare different types")
+            return
+
+        if n1[0] == "review":
+            a = n1[1].get("result", {}).get("summary", {}).get("overall_assessment", "")
+            b = n2[1].get("result", {}).get("summary", {}).get("overall_assessment", "")
+
+            txt = f"""
+=== COMPARE REVIEWS ===
+
+--- A ---
+{a}
+
+--- B ---
+{b}
 """
         else:
-            text = json.dumps(data, indent=2)
+            txt = "Compare not implemented for this type"
 
-        self.detail_panel.update_content(text)
+        self.detail.show(txt)
 
 
 if __name__ == "__main__":
