@@ -115,7 +115,7 @@ class ContextaConsole(App):
 
     def on_mount(self):
 
-        self.tree = self.query_one("#tree", Tree)
+        self.artifact_tree = self.query_one("#tree", Tree)
         self.detail = self.query_one("#detail", Static)
 
         self.personas_input = self.query_one("#personas", Input)
@@ -130,7 +130,7 @@ class ContextaConsole(App):
 
     def load_tree(self):
 
-        root = self.tree.root
+        root = self.artifact_tree.root
         root.remove_children()
         root.expand()
 
@@ -213,7 +213,7 @@ class ContextaConsole(App):
 
     def on_button_pressed(self, event):
 
-        node = self.tree.cursor_node
+        node = self.artifact_tree.cursor_node
 
         if not node or not node.data:
             return
