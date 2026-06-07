@@ -505,7 +505,7 @@ class ContextaV72(App):
     def reload_all(self):
         self.model = build_model()
         self.load_tree()
-        self.log("Refreshed pipeline data")
+        self.ui_log("Refreshed pipeline data")
 
     def load_tree(self):
         root = self.pipeline_tree.root
@@ -553,7 +553,7 @@ class ContextaV72(App):
     # Logging / labels
     # -----------------------------------------------------
 
-    def log(self, text: str):
+    def ui_log(self, text: str):
         self.log_output.update(text)
 
     def set_mode(self, mode_name: str):
@@ -565,7 +565,7 @@ class ContextaV72(App):
             self.compare_nodes = []
             self.context_label.update("Compare context: Select item 1 from the tree, then item 2 of the same type. Supported: Review, Proposal, Learning.")
             self.compare_output.update("Compare mode is ON\nSelected option 1: —\nSelected option 2: —")
-            self.log("Compare mode ON")
+            self.ui_log("Compare mode ON")
         else:
             self.compare_mode = False
             self.compare_type = None
@@ -599,7 +599,7 @@ class ContextaV72(App):
         # Run actions
         node = self.pipeline_tree.cursor_node
         if not node or not node.data:
-            self.log("Select a node first")
+            self.ui_log("Select a node first")
             return
 
         node_type, data, display = node.data
@@ -608,19 +608,19 @@ class ContextaV72(App):
 
         if button_id == "btn_review":
             if node_type != "version":
-                self.log("Run Review requires a Version selected")
+                self.ui_log("Run Review requires a Version selected")
                 return
             result = api_post("/reviews", {"version_id": data.get("version_id")})
             if result:
                 self.reload_all()
-                self.log("Review created")
+                self.ui_log("Review created")
             else:
-                self.log("Failed to create review")
+                self.ui_log("Failed to create review")
             return
 
         if button_id == "btn_iteration":
             if node_type not in {"version", "review"}:
-                self.log("Run Iteration requires a Version or Review selected")
+                self.ui_log("Run Iteration requires a Version or Review selected")
                 return
             version_id = data.get("version_id")
             result = api_post("/reviews", {
@@ -630,44 +630,44 @@ class ContextaV72(App):
             })
             if result:
                 self.reload_all()
-                self.log("Iteration review created")
+                self.ui_log("Iteration review created")
             else:
-                self.log("Failed to create iteration review")
+                self.ui_log("Failed to create iteration review")
             return
 
         if button_id == "btn_reconcile":
             if node_type not in {"version", "review"}:
-                self.log("Run Reconcile requires a Version or Review selected")
+                self.ui_log("Run Reconcile requires a Version or Review selected")
                 return
             version_id = data.get("version_id")
             version_reviews = self.model.get("reviews_by_version", {}).get(version_id, [])
             review_ids = [r.get("review_id") for r in version_reviews if r.get("review_id")]
             if len(review_ids) < 2:
-                self.log("Need at least 2 reviews on the selected version")
+                self.ui_log("Need at least 2 reviews on the selected version")
                 return
             result = api_post("/reconciliation", {"review_ids": review_ids})
             if result:
                 self.reload_all()
-                self.log("Reconciliation created")
+                self.ui_log("Reconciliation created")
             else:
-                self.log("Failed to create reconciliation")
+                self.ui_log("Failed to create reconciliation")
             return
 
         if button_id == "btn_proposal":
             if node_type != "reconciliation":
-                self.log("Run Proposal requires a Reconciliation selected")
+                self.ui_log("Run Proposal requires a Reconciliation selected")
                 return
             result = api_post("/proposal", {"recon_id": data.get("recon_id")})
             if result:
                 self.reload_all()
-                self.log("Proposal created")
+                self.ui_log("Proposal created")
             else:
-                self.log("Failed to create proposal")
+                self.ui_log("Failed to create proposal")
             return
 
         if button_id == "btn_learning":
             if node_type != "proposal":
-                self.log("Run Learning requires a Proposal selected")
+                self.ui_log("Run Learning requires a Proposal selected")
                 return
             result = api_post("/learning", {
                 "source_type": "proposal",
@@ -675,9 +675,9 @@ class ContextaV72(App):
             })
             if result:
                 self.reload_all()
-                self.log("Learning created")
+                self.ui_log("Learning created")
             else:
-                self.log("Failed to create learning")
+                self.ui_log("Failed to create learning")
             return
 
     # -----------------------------------------------------
@@ -712,7 +712,7 @@ class ContextaV72(App):
                 self.compare_nodes = []
                 self.mode_label.update("Mode: Compare")
                 self.context_label.update("Compare complete. Select Compare again to start a new comparison.")
-                self.log("Compare complete")
+                self.ui_log("Compare complete")
                 return
 
     # -----------------------------------------------------
