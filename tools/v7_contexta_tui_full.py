@@ -1,4 +1,3 @@
-
 # v7_2_contexta_tui_full.py
 # Contexta TUI v7.2
 # Grouped pipeline view (Option B), version-aware naming, top menu, contextual second line,
@@ -491,7 +490,7 @@ class ContextaV72(App):
         self.input_context = self.query_one("#input_context", Input)
         self.log_output = self.query_one("#log_output", Static)
 
-        self.current_mode = "Review"
+        self.ui_mode = "Review"
         self.compare_mode = False
         self.compare_type: Optional[str] = None
         self.compare_nodes: List[Tuple[str, Dict[str, Any], str]] = []
@@ -557,7 +556,7 @@ class ContextaV72(App):
         self.log_output.update(text)
 
     def set_mode(self, mode_name: str):
-        self.current_mode = mode_name
+        self.ui_mode = mode_name
         self.mode_label.update(f"Mode: {mode_name}")
         if mode_name == "Compare":
             self.compare_mode = True
@@ -690,7 +689,7 @@ class ContextaV72(App):
             return
 
         node_type, data, display = node.data
-        self.context_label.update(f"Context: {self.current_mode} | Selected: {display}")
+        self.context_label.update(f"Context: {self.ui_mode} | Selected: {display}")
         self.render_details(node_type, data, display)
         self.render_risk(node_type, data)
 
